@@ -1,0 +1,33 @@
+target
+GTAGS
+GRTAGS
+GPATH
+prop
+out
+
+# OS X
+.DS_Store
+
+# eclipse
+.project
+.classpath
+.settings
+
+# intellij
+*.iml
+*.ipr
+*.iws
+.idea
+
+# editors
+*.sublime-project
+*.sublime-workspace
+*~
+
+# build
+build-local.properties
+.gradle
+build
+
+# JVM crash reports
+hs_err_pid*
