@@ -1,2 +1,2 @@
 # Helios
-Helios is a modular architecture for domain specific services.
+Helios is a component architecture for domain specific services.
