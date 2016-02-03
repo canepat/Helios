@@ -1,13 +1,13 @@
 # Helios
-Helios is a component architecture for domain specific services.
+Helios is a component library for domain specific scalable services.
 
 Build
 -----
 
 You require one of the following to build Helios:
 
-* Latest stable [Oracle JDK 8](http://www.oracle.com/technetwork/java/)
-* Latest stable [Open JDK 8](http://openjdk.java.net/projects/jdk8/)
+* Latest stable [Open JDK 8](http://openjdk.java.net/projects/jdk8/) or [Oracle JDK 8](http://www.oracle.com/technetwork/java/)
+* Latest stable [Gradle](http://gradle.org/getting-started-gradle-java/)
 
 Full clean and build of the project:
 
