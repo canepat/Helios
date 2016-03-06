@@ -2,7 +2,7 @@ package org.helios.echo;
 
 import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.WaitStrategy;
-import org.helios.mmb.Helios;
+import org.helios.Helios;
 import org.helios.mmb.InputGear;
 import org.helios.mmb.OutputGear;
 import org.helios.util.ShutdownHelper;

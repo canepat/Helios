@@ -29,7 +29,7 @@ public class Journaller implements SequenceReportingEventHandler<InputBufferEven
         this.flushing = flushing;
 
         //lengthBuffer = ByteBuffer.allocateDirect(BUFFER_LENGTH_SIZE);
-        batchingBuffer = ByteBuffer.allocate(PAGE_SIZE);
+        batchingBuffer = ByteBuffer.allocate(PAGE_SIZE); // TODO: can be improved with DirectBuffer?
     }
 
     @Override

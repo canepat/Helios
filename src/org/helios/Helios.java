@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.helios.mmb;
+package org.helios;
 
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -27,6 +27,8 @@ import org.helios.core.journal.strategy.JournalStrategy;
 import org.helios.core.journal.strategy.PositionalWriteJournalStrategy;
 import org.helios.core.journal.strategy.SeekThenWriteJournalStrategy;
 import org.helios.core.replica.Replicator;
+import org.helios.mmb.InputGear;
+import org.helios.mmb.OutputGear;
 import uk.co.real_logic.aeron.Aeron;
 import uk.co.real_logic.aeron.driver.MediaDriver;
 import uk.co.real_logic.aeron.driver.ThreadingMode;
