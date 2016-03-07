@@ -24,9 +24,9 @@ import org.helios.core.engine.ServiceHandler;
 import org.helios.core.engine.ServiceHandlerFactory;
 import org.helios.core.journal.Journaller;
 import org.helios.core.journal.strategy.JournalStrategy;
-import org.helios.core.journal.strategy.PositionalWriteJournalStrategy;
-import org.helios.core.journal.strategy.SeekThenWriteJournalStrategy;
 import org.helios.core.replica.Replicator;
+import org.helios.gateway.ServiceProxy;
+import org.helios.gateway.ServiceProxyFactory;
 import org.helios.mmb.InputGear;
 import org.helios.mmb.OutputGear;
 import uk.co.real_logic.aeron.Aeron;
@@ -37,36 +37,44 @@ import uk.co.real_logic.agrona.ErrorHandler;
 import uk.co.real_logic.agrona.concurrent.BackoffIdleStrategy;
 import uk.co.real_logic.agrona.concurrent.NoOpIdleStrategy;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.function.Consumer;
 
 public class Helios implements AutoCloseable, ErrorHandler
 {
+    private final HeliosContext context;
     private final MediaDriver mediaDriver;
     private final Aeron aeron;
-    private final Journaller inputJournaller;
+    private Journaller inputJournaller;
     private Replicator replicator;
+    private Consumer<Throwable> errorHandler;
 
     public Helios()
     {
-        this(new MediaDriver.Context()
-            .threadingMode(ThreadingMode.DEDICATED)
-            .conductorIdleStrategy(new BackoffIdleStrategy(1, 1, 1, 1))
-            .receiverIdleStrategy(new NoOpIdleStrategy())
-            .senderIdleStrategy(new NoOpIdleStrategy()));
+        this(new HeliosContext());
     }
 
-    public Helios(final MediaDriver.Context driverContext)
+    public Helios(final HeliosContext context)
     {
-        String mediaDriverConf = System.getProperty("helios.core.media_driver.conf");
+        this(context, new MediaDriver.Context()
+                .threadingMode(ThreadingMode.DEDICATED)
+                .conductorIdleStrategy(new BackoffIdleStrategy(1, 1, 1, 1))
+                .receiverIdleStrategy(new NoOpIdleStrategy())
+                .senderIdleStrategy(new NoOpIdleStrategy()));
+    }
+
+    public Helios(final HeliosContext context, final MediaDriver.Context driverContext)
+    {
+        this.context = context;
+
+        String mediaDriverConf = context.getMediaDriverConf();
         if (mediaDriverConf != null)
         {
             MediaDriver.loadPropertiesFile(mediaDriverConf);
         }
 
-        boolean embeddedMediaDriver = !Boolean.getBoolean("helios.core.media_driver.external");
+        final boolean embeddedMediaDriver = context.isMediaDriverEmbedded();
         mediaDriver = embeddedMediaDriver ? MediaDriver.launchEmbedded(driverContext) : null;
 
         Aeron.Context aeronContext = new Aeron.Context().errorHandler(this);
@@ -76,24 +84,21 @@ public class Helios implements AutoCloseable, ErrorHandler
         }
         aeron = Aeron.connect(aeronContext);
 
-        final String journalDirName = System.getProperty("helios.core.journal.dir", "./");
-        final int journalFileSize = Integer.getInteger("helios.core.journal.file_size", 1024 * 1024 * 1024);
-        final int journalFileCount = Integer.getInteger("helios.core.journal.file_count", 1);
-        boolean seekAndWrite = Boolean.getBoolean("helios.core.journal.seek_and_write");
-        boolean flushing = Boolean.getBoolean("helios.core.journal.flushing");
+        final boolean journalEnabled = context.isJournalEnabled();
+        if (journalEnabled)
+        {
+            final JournalStrategy journalStrategy = context.getJournalStrategy();
+            final boolean flushingEnabled = context.isJournalFlushingEnabled();
+            inputJournaller = new Journaller(journalStrategy, flushingEnabled);
+        }
 
-        final Path journalDir = Paths.get(journalDirName);
-        final JournalStrategy journalStrategy = seekAndWrite ?
-            new SeekThenWriteJournalStrategy(journalDir, journalFileSize, journalFileCount) :
-            new PositionalWriteJournalStrategy(journalDir, journalFileSize, journalFileCount);
-
-        inputJournaller = new Journaller(journalStrategy, flushing);
-
-        boolean replicatorEnabled = Boolean.getBoolean("helios.core.replicator.enabled");
-        if (replicatorEnabled)
+        final boolean replicaEnabled = context.isReplicaEnabled();
+        if (replicaEnabled)
         {
             replicator = new Replicator(aeron);
         }
+
+        errorHandler = System.err::println;
     }
 
     @Override
@@ -106,20 +111,27 @@ public class Helios implements AutoCloseable, ErrorHandler
     @Override
     public void onError(Throwable throwable)
     {
-        //System.err.println(throwable); //TODO: logging
+        errorHandler.accept(throwable);
     }
 
-    public InputGear addInputGear(int bufferSize, final WaitStrategy strategy, final String channel, int streamId)
+    public void setErrorHandler(Consumer<Throwable> errorHandler)
+    {
+        this.errorHandler = errorHandler;
+    }
+
+    public InputGear addInputGear(int bufferSize, final String channel, int streamId)
     {
         final ThreadFactory threadFactory = Executors.privilegedThreadFactory();
+        final WaitStrategy strategy = context.getInputWaitStrategy();
         final Disruptor<InputBufferEvent> disruptor = new Disruptor<>(InputBufferEvent::new, bufferSize, threadFactory, ProducerType.SINGLE, strategy);
 
         return new InputGear(disruptor, aeron, channel, streamId);
     }
 
-    public OutputGear addOutputGear(int bufferSize, final WaitStrategy strategy, final String channel, int streamId)
+    public OutputGear addOutputGear(int bufferSize, final String channel, int streamId)
     {
         final ThreadFactory threadFactory = Executors.privilegedThreadFactory();
+        final WaitStrategy strategy = context.getOutputWaitStrategy();
         final Disruptor<OutputBufferEvent> disruptor = new Disruptor<>(OutputBufferEvent::new, bufferSize, threadFactory, ProducerType.SINGLE, strategy);
 
         return new OutputGear(disruptor, aeron, channel, streamId);
@@ -129,14 +141,37 @@ public class Helios implements AutoCloseable, ErrorHandler
     {
         final ServiceHandler serviceHandler = factory.createServiceHandler(this, outputGear);
 
-        if (replicator != null)
+        if (inputJournaller != null)
         {
-            inputGear.getDisruptor().handleEventsWith(inputJournaller, replicator).then(serviceHandler);
+            if (replicator != null)
+            {
+                inputGear.getDisruptor().handleEventsWith(inputJournaller, replicator).handleEventsWith(serviceHandler);
+            }
+            else
+            {
+                inputGear.getDisruptor().handleEventsWith(inputJournaller).then(serviceHandler);
+            }
         }
         else
         {
-            inputGear.getDisruptor().handleEventsWith(inputJournaller).then(serviceHandler);
+            if (replicator != null)
+            {
+                inputGear.getDisruptor().handleEventsWith(replicator).then(serviceHandler);
+            }
+            else
+            {
+                inputGear.getDisruptor().handleEventsWith(serviceHandler);
+            }
         }
+
+        return this;
+    }
+
+    public Helios addServiceProxy(final ServiceProxyFactory factory, final InputGear inputGear, final OutputGear outputGear)
+    {
+        final ServiceProxy serviceProxy = factory.createServiceProxy(this, outputGear);
+
+        inputGear.getDisruptor().handleEventsWith(serviceProxy);
 
         return this;
     }
