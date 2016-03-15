@@ -1,9 +1,10 @@
 package org.helios.gateway;
 
 import org.helios.Helios;
-import org.helios.mmb.OutputGear;
+import org.helios.mmb.MMBPublisher;
+import org.helios.mmb.MMBSubscriber;
 
-public interface ServiceProxyFactory
+public interface ServiceProxyFactory<T extends ServiceProxy>
 {
-    ServiceProxy createServiceProxy(final Helios helios, final OutputGear outputGear);
+    T createServiceProxy(final Helios helios, final MMBSubscriber subscriber, final MMBPublisher publisher);
 }

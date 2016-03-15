@@ -82,6 +82,13 @@ public class AeronSubscriber implements MMBSubscriber
         return fragmentsRead;
     }
 
+    @Override
+    public void idle(final int workCount)
+    {
+        idleStrategy.idle(workCount);
+    }
+
+    @Override
     public void close() throws Exception
     {
         subscription.close();
@@ -91,5 +98,10 @@ public class AeronSubscriber implements MMBSubscriber
     public String toString()
     {
         return "channel=" + subscription.channel() + " streamId=" + subscription.streamId();
+    }
+
+    public Subscription getSubscription()
+    {
+        return subscription;
     }
 }

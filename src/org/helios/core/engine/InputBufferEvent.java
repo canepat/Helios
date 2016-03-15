@@ -48,6 +48,6 @@ public class InputBufferEvent
     @Override
     public String toString()
     {
-        return "IBE: buffer=" + buffer + ", eventTime=" + eventTime;
+        return "IBE: " + super.toString() + ", eventTime=" + eventTime;
     }
 }

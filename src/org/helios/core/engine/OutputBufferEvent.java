@@ -48,6 +48,6 @@ public class OutputBufferEvent
     @Override
     public String toString()
     {
-        return "OBE: buffer=" + buffer + ", eventTime=" + eventTime;
+        return "OBE: " + super.toString() + ", eventTime=" + eventTime;
     }
 }

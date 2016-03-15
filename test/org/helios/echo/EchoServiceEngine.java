@@ -8,42 +8,35 @@ import org.helios.util.ShutdownHelper;
 
 import java.util.concurrent.CountDownLatch;
 
-import static java.lang.Integer.getInteger;
-import static java.lang.System.getProperty;
-
 public class EchoServiceEngine
 {
+    private static final int INPUT_RING_SIZE = EchoConfiguration.SERVICE_INPUT_RING_SIZE;
+    private static final int OUTPUT_RING_SIZE = EchoConfiguration.SERVICE_OUTPUT_RING_SIZE;
+    private static final String INPUT_CHANNEL = EchoConfiguration.SERVICE_INPUT_CHANNEL;
+    private static final int INPUT_STREAM_ID = EchoConfiguration.SERVICE_INPUT_STREAM_ID;
+    private static final String OUTPUT_CHANNEL = EchoConfiguration.SERVICE_OUTPUT_CHANNEL;
+    private static final int OUTPUT_STREAM_ID = EchoConfiguration.SERVICE_OUTPUT_STREAM_ID;
+
     public static void main(String[] args) throws Exception
     {
-        System.out.print("Reading configuration properties...");
-
-        final int inputBufferSize = getInteger("echo.service.input_buffer_size", 512 * 1024);
-        final int outputBufferSize = getInteger("echo.service.output_buffer_size", 512 * 1024);
-        final String inputChannel = getProperty("echo.service.input_channel", "udp://localhost:40123");
-        final int inputStreamId = getInteger("echo.service.input_stream_id", 10);
-        final String outputChannel = getProperty("echo.service.output_channel", "udp://localhost:40124");
-        final int outputStreamId = getInteger("echo.service.output_stream_id", 10);
-
-        System.out.print("done\nStarting Helios engine...");
+        System.out.print("Starting Helios engine...");
 
         final HeliosContext context = new HeliosContext();
         context.setJournalEnabled(true);
-
-        final CountDownLatch runningLatch = new CountDownLatch(1);
 
         try(final Helios helios = new Helios(context))
         {
             System.out.print("done\nCreating Helios I/O gears...");
 
-            final OutputGear outputGear = helios.addOutputGear(outputBufferSize, outputChannel, outputStreamId);
-            final InputGear inputGear = helios.addInputGear(inputBufferSize, inputChannel, inputStreamId);
+            final OutputGear outputGear = helios.addOutputGear(OUTPUT_RING_SIZE, OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
+            final InputGear inputGear = helios.addInputGear(INPUT_RING_SIZE, INPUT_CHANNEL, INPUT_STREAM_ID);
 
             helios.addServiceHandler(new EchoServiceHandlerFactory(), inputGear, outputGear);
 
-            System.out.println("done\nEchoServiceEngine is now running.");
-            System.out.println(helios);
-
+            final CountDownLatch runningLatch = new CountDownLatch(1);
             ShutdownHelper.register(runningLatch::countDown);
+
+            System.out.println("done\nEchoServiceEngine is now running.");
 
             outputGear.start();
             inputGear.start();

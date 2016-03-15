@@ -1,9 +1,13 @@
 package org.helios.gateway;
 
-import com.lmax.disruptor.EventHandler;
-import com.lmax.disruptor.LifecycleAware;
-import org.helios.core.engine.InputBufferEvent;
+import uk.co.real_logic.aeron.logbuffer.FragmentHandler;
+import uk.co.real_logic.agrona.DirectBuffer;
 
-public interface ServiceProxy extends EventHandler<InputBufferEvent>, LifecycleAware,  AutoCloseable
+public interface ServiceProxy extends AutoCloseable, FragmentHandler
 {
+    long send(final DirectBuffer buffer, final int length);
+
+    long receive() throws Exception;
+
+    void idle(final int workCount);
 }

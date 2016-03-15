@@ -53,7 +53,7 @@ checkstyle {
 }
 
 javadoc {
-    title = '<h1>Tests</h1>'
+    title = '<h1>Helios</h1>'
 
     options.bottom = '<i>Copyright &#169; 2016. All Rights Reserved.</i>'
     options.addStringOption('XDignore.symbol.file', '-quiet')

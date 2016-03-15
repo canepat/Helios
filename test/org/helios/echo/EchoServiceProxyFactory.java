@@ -1,15 +1,15 @@
 package org.helios.echo;
 
 import org.helios.Helios;
-import org.helios.gateway.ServiceProxy;
 import org.helios.gateway.ServiceProxyFactory;
-import org.helios.mmb.OutputGear;
+import org.helios.mmb.MMBPublisher;
+import org.helios.mmb.MMBSubscriber;
 
-public class EchoServiceProxyFactory implements ServiceProxyFactory
+public class EchoServiceProxyFactory implements ServiceProxyFactory<EchoServiceProxy>
 {
     @Override
-    public ServiceProxy createServiceProxy(final Helios helios, final OutputGear outputGear)
+    public EchoServiceProxy createServiceProxy(final Helios helios, final MMBSubscriber subscriber, final MMBPublisher publisher)
     {
-        return new EchoServiceProxy(outputGear.getDisruptor());
+        return new EchoServiceProxy(subscriber, publisher);
     }
 }

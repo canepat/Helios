@@ -18,8 +18,7 @@ package org.helios.mmb;
 import com.lmax.disruptor.dsl.Disruptor;
 import org.helios.core.engine.InputBufferEvent;
 import org.helios.core.engine.InputFragmentHandler;
-import uk.co.real_logic.aeron.Aeron;
-import uk.co.real_logic.aeron.FragmentAssembler;
+import uk.co.real_logic.aeron.*;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,7 +28,7 @@ public class InputGear implements MMBGear<InputBufferEvent>
 {
     private final AtomicBoolean running;
     private final Disruptor<InputBufferEvent> inputDisruptor;
-    private final MMBSubscriber busSubscriber;
+    private final AeronSubscriber busSubscriber;
     private final FragmentAssembler fragmentAssembler;
     private final int fragmentLimit;
     private final ExecutorService executorService;

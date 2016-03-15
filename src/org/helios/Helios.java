@@ -25,11 +25,15 @@ import org.helios.core.engine.ServiceHandlerFactory;
 import org.helios.core.journal.Journaller;
 import org.helios.core.journal.strategy.JournalStrategy;
 import org.helios.core.replica.Replicator;
+import org.helios.gateway.ServiceEventHandler;
+import org.helios.gateway.ServiceEventHandlerFactory;
 import org.helios.gateway.ServiceProxy;
 import org.helios.gateway.ServiceProxyFactory;
-import org.helios.mmb.InputGear;
-import org.helios.mmb.OutputGear;
+import org.helios.mmb.*;
 import uk.co.real_logic.aeron.Aeron;
+import uk.co.real_logic.aeron.AvailableImageHandler;
+import uk.co.real_logic.aeron.Image;
+import uk.co.real_logic.aeron.UnavailableImageHandler;
 import uk.co.real_logic.aeron.driver.MediaDriver;
 import uk.co.real_logic.aeron.driver.ThreadingMode;
 import uk.co.real_logic.agrona.CloseHelper;
@@ -39,9 +43,10 @@ import uk.co.real_logic.agrona.concurrent.NoOpIdleStrategy;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-public class Helios implements AutoCloseable, ErrorHandler
+public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandler, UnavailableImageHandler
 {
     private final HeliosContext context;
     private final MediaDriver mediaDriver;
@@ -49,6 +54,8 @@ public class Helios implements AutoCloseable, ErrorHandler
     private Journaller inputJournaller;
     private Replicator replicator;
     private Consumer<Throwable> errorHandler;
+    private AvailableAssociationHandler availableAssociationHandler;
+    private UnavailableAssociationHandler unavailableAssociationHandler;
 
     public Helios()
     {
@@ -77,7 +84,7 @@ public class Helios implements AutoCloseable, ErrorHandler
         final boolean embeddedMediaDriver = context.isMediaDriverEmbedded();
         mediaDriver = embeddedMediaDriver ? MediaDriver.launchEmbedded(driverContext) : null;
 
-        Aeron.Context aeronContext = new Aeron.Context().errorHandler(this);
+        final Aeron.Context aeronContext = new Aeron.Context().errorHandler(this).availableImageHandler(this).unavailableImageHandler(this);
         if (embeddedMediaDriver)
         {
             aeronContext.aeronDirectoryName(mediaDriver.aeronDirectoryName());
@@ -114,9 +121,40 @@ public class Helios implements AutoCloseable, ErrorHandler
         errorHandler.accept(throwable);
     }
 
-    public void setErrorHandler(Consumer<Throwable> errorHandler)
+    @Override
+    public void onAvailableImage(final Image image)
+    {
+        if (availableAssociationHandler != null)
+        {
+            availableAssociationHandler.onAssociationEstablished();
+        }
+    }
+
+    @Override
+    public void onUnavailableImage(final Image image)
+    {
+        if (unavailableAssociationHandler != null)
+        {
+            unavailableAssociationHandler.onAssociationBroken();
+        }
+    }
+
+    public Helios errorHandler(Consumer<Throwable> errorHandler)
     {
         this.errorHandler = errorHandler;
+        return this;
+    }
+
+    public Helios availableAssociationHandler(final AvailableAssociationHandler handler)
+    {
+        this.availableAssociationHandler = handler;
+        return this;
+    }
+
+    public Helios unavailableAssociationHandler(final UnavailableAssociationHandler handler)
+    {
+        this.unavailableAssociationHandler = handler;
+        return this;
     }
 
     public InputGear addInputGear(int bufferSize, final String channel, int streamId)
@@ -137,7 +175,7 @@ public class Helios implements AutoCloseable, ErrorHandler
         return new OutputGear(disruptor, aeron, channel, streamId);
     }
 
-    public Helios addServiceHandler(final ServiceHandlerFactory factory, final InputGear inputGear, final OutputGear outputGear)
+    public ServiceHandler addServiceHandler(final ServiceHandlerFactory factory, final InputGear inputGear, final OutputGear outputGear)
     {
         final ServiceHandler serviceHandler = factory.createServiceHandler(this, outputGear);
 
@@ -164,16 +202,28 @@ public class Helios implements AutoCloseable, ErrorHandler
             }
         }
 
-        return this;
+        return serviceHandler;
     }
 
-    public Helios addServiceProxy(final ServiceProxyFactory factory, final InputGear inputGear, final OutputGear outputGear)
+    public <T extends ServiceProxy> T addServiceProxy(final ServiceProxyFactory<T> factory,
+                                                      final String inputChannel, int inputStreamId,
+                                                      final String outputChannel, int outputStreamId)
     {
-        final ServiceProxy serviceProxy = factory.createServiceProxy(this, outputGear);
+        final AtomicBoolean running = new AtomicBoolean(true);
 
-        inputGear.getDisruptor().handleEventsWith(serviceProxy);
+        final AeronSubscriber busSubscriber = new AeronSubscriber(running, aeron, inputChannel, inputStreamId);
+        final AeronPublisher busPublisher = new AeronPublisher(aeron, outputChannel, outputStreamId);
 
-        return this;
+        return factory.createServiceProxy(this, busSubscriber, busPublisher);
+    }
+
+    public ServiceEventHandler addServiceEventHandler(final ServiceEventHandlerFactory factory, final InputGear inputGear)
+    {
+        final ServiceEventHandler serviceEventHandler = factory.createServiceEventHandler(this, inputGear);
+
+        inputGear.getDisruptor().handleEventsWith(serviceEventHandler);
+
+        return serviceEventHandler;
     }
 
     @Override

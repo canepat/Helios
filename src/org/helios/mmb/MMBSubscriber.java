@@ -22,4 +22,6 @@ public interface MMBSubscriber extends AutoCloseable
     void receive(final FragmentHandler fragmentHandler, final int fragmentLimit);
 
     int poll(final FragmentHandler fragmentHandler, final int fragmentLimit);
+
+    void idle(final int workCount);
 }

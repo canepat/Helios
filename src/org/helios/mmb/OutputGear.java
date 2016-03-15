@@ -24,7 +24,7 @@ import uk.co.real_logic.agrona.LangUtil;
 public class OutputGear implements AutoCloseable, MMBGear<OutputBufferEvent>
 {
     private final Disruptor<OutputBufferEvent> outputDisruptor;
-    private final MMBPublisher busPublisher;
+    private final AeronPublisher busPublisher;
 
     public OutputGear(final Disruptor<OutputBufferEvent> outputDisruptor, final Aeron aeron, final String channel, int streamId)
     {

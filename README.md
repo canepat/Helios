@@ -1,5 +1,5 @@
 # Helios
-Helios is a component library for domain specific scalable services, based on [Aeron](https://github.com/real-logic/Aeron) and [LMAX Disruptor](https://github.com/LMAX-Exchange/disruptor).
+Helios is a component library for domain-specific scalable services, based on [Aeron](https://github.com/real-logic/Aeron) and [LMAX Disruptor](https://github.com/LMAX-Exchange/disruptor).
 
 Build
 -----

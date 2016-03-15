@@ -73,56 +73,6 @@ public class AeronPublisher implements MMBPublisher
         send(buffer, 0, length);
     }
 
-    /*@Override
-    public void send(final ByteBuffer message)
-    {
-        final int length = message.remaining(); // message.limit() - message.position();
-
-        buffer.putBytes(0, message, message.position(), length);
-        //System.out.println("Going publishing length=" + length);
-        long backPressureCount = 0;
-
-        long result;
-        while ((result = publication.offer(buffer, 0, length)) < 0L)
-        {
-            if (result == Publication.BACK_PRESSURED)
-            {
-                //System.out.println("Offer failed due to back pressure");
-                backPressureCount++;
-            }
-            else if (result == Publication.NOT_CONNECTED)
-            {
-                //System.out.println("Offer failed because publisher is not yet connected to subscriber");
-            }
-            else
-            {
-                //System.out.println("Offer failed due to unknown reason");
-            }
-
-            idleStrategy.idle(0);
-        }
-
-        //System.out.println("Done publishing on [" + this + "]. BPC=" + backPressureCount);
-    }
-
-    @Override
-    public long offer(final ByteBuffer messageBuffer)
-    {
-        final int length = messageBuffer.remaining();
-
-        //buffer.putBytes(0, messageBuffer, messageBuffer.position(), length);
-
-        return publication.offer(buffer, 0, length);
-    }
-
-    @Override
-    public long offer(final ByteBuffer messageBuffer, final int offset, final int length)
-    {
-        //buffer.putBytes(0, messageBuffer, offset, length);
-
-        return publication.offer(buffer, 0, length);
-    }*/
-
     @Override
     public long offer(final DirectBuffer buffer, final int offset, final int length)
     {
