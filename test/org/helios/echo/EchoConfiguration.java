@@ -35,6 +35,7 @@ public class EchoConfiguration
     public static final String WARMUP_NUMBER_OF_ITERATIONS_PROP = "echo.warmup.iterations";
     public static final String MESSAGE_LENGTH_PROP = "echo.messageLength";
     public static final String NUMBER_OF_MESSAGES_PROP = "echo.messages";
+    public static final String NUMBER_OF_ITERATIONS_PROP = "echo.iterations";
     public static final String LINGER_TIMEOUT_MS_PROP = "echo.lingerTimeout";
 
     public static final int SERVICE_INPUT_RING_SIZE;
@@ -49,6 +50,7 @@ public class EchoConfiguration
     public static final int WARMUP_NUMBER_OF_ITERATIONS;
     public static final int MESSAGE_LENGTH;
     public static final int NUMBER_OF_MESSAGES;
+    public static final int NUMBER_OF_ITERATIONS;
     public static final long LINGER_TIMEOUT_MS;
 
     static
@@ -59,10 +61,11 @@ public class EchoConfiguration
         SERVICE_INPUT_CHANNEL = getProperty(SERVICE_INPUT_CHANNEL_PROP, "udp://localhost:40123");
         SERVICE_INPUT_STREAM_ID = getInteger(SERVICE_INPUT_STREAM_ID_PROP, 10);
         SERVICE_OUTPUT_CHANNEL = getProperty(SERVICE_OUTPUT_CHANNEL_PROP, "udp://localhost:40124");
-        SERVICE_OUTPUT_STREAM_ID = getInteger(SERVICE_OUTPUT_STREAM_ID_PROP, 10);
+        SERVICE_OUTPUT_STREAM_ID = getInteger(SERVICE_OUTPUT_STREAM_ID_PROP, 11);
 
         MESSAGE_LENGTH = getInteger(MESSAGE_LENGTH_PROP, 256);
         NUMBER_OF_MESSAGES = getInteger(NUMBER_OF_MESSAGES_PROP, 1_000_000/*1_000_000*/);
+        NUMBER_OF_ITERATIONS = getInteger(NUMBER_OF_ITERATIONS_PROP, 10/*5*/);
         WARMUP_NUMBER_OF_MESSAGES = getInteger(WARMUP_NUMBER_OF_MESSAGES_PROP, 10_000/*10_000*/);
         WARMUP_NUMBER_OF_ITERATIONS = getInteger(WARMUP_NUMBER_OF_ITERATIONS_PROP, 1/*5*/);
         LINGER_TIMEOUT_MS = getLong(LINGER_TIMEOUT_MS_PROP, TimeUnit.SECONDS.toMillis(5));

@@ -9,21 +9,29 @@
 
     <types>
         <composite name="messageHeader" description="Message identifiers and length of message root">
-            <type name="blockLength" primitiveType="uint16"/>
-            <type name="templateId" primitiveType="uint16"/>
+            <type name="messageLength" primitiveType="uint16"/>
             <type name="schemaId" primitiveType="uint16"/>
             <type name="version" primitiveType="uint16"/>
-            <type name="gatewayId" primitiveType="uint16"/>
+
+            <type name="messageTypeId" primitiveType="uint32"/>
+
+            <type name="topicSequence" primitiveType="uint64"/>
+            <type name="topicId" primitiveType="uint32"/>
+
+            <type name="nodeId" primitiveType="uint8"/>
+            <type name="timestamp" primitiveType="uint64"/>
         </composite>
         <composite name="groupSizeEncoding" description="Repeating group dimensions">
             <type name="blockLength" primitiveType="uint16"/>
             <type name="numInGroup" primitiveType="uint8"/>
         </composite>
         <composite name="varDataEncoding">
-            <type name="length" primitiveType="uint8"/>
+            <type name="length" primitiveType="uint16"/>
             <type name="varData" primitiveType="uint8" length="0" characterEncoding="UTF-8"/>
         </composite>
     </types>
 
     <sbe:message name="Shutdown" id="0" description="Shutdown message"/>
+
+    <sbe:message name="Heartbeat" id="1" description="Heartbeat message"/>
 </sbe:messageSchema>

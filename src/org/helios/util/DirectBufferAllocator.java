@@ -4,12 +4,12 @@ import java.nio.ByteBuffer;
 
 public final class DirectBufferAllocator
 {
-    public static ByteBuffer allocateDirect(int capacity)
+    public static ByteBuffer allocate(int capacity)
     {
         return ByteBuffer.allocateDirect(capacity);
     }
 
-    public static void freeDirect(ByteBuffer buffer)
+    public static void free(ByteBuffer buffer)
     {
         ((sun.nio.ch.DirectBuffer)buffer).cleaner().clean();
     }

@@ -1,15 +1,13 @@
 package org.helios.echo;
 
-import org.helios.core.engine.ServiceHandler;
-import org.helios.core.engine.ServiceHandlerFactory;
-import org.helios.Helios;
-import org.helios.mmb.OutputGear;
+import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.helios.core.service.ServiceHandlerFactory;
 
-public class EchoServiceHandlerFactory implements ServiceHandlerFactory
+class EchoServiceHandlerFactory implements ServiceHandlerFactory<EchoServiceHandler>
 {
     @Override
-    public ServiceHandler createServiceHandler(final Helios helios, final OutputGear outputGear)
+    public EchoServiceHandler createServiceHandler(final RingBuffer... outputBuffers)
     {
-        return new EchoServiceHandler(outputGear.getDisruptor());
+        return new EchoServiceHandler(outputBuffers[0]);
     }
 }

@@ -1,29 +1,35 @@
 package org.helios.echo;
 
-import com.lmax.disruptor.dsl.Disruptor;
-import org.helios.core.engine.InputBufferEvent;
-import org.helios.core.engine.OutputBufferEvent;
-import org.helios.core.engine.BaseServiceHandler;
+import org.agrona.MutableDirectBuffer;
+import org.agrona.concurrent.BusySpinIdleStrategy;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.helios.core.MessageTypes;
+import org.helios.core.service.ServiceHandler;
 
-public class EchoServiceHandler extends BaseServiceHandler
+public class EchoServiceHandler implements ServiceHandler
 {
-    public EchoServiceHandler(final Disruptor<OutputBufferEvent> outputDisruptor)
+    private final RingBuffer outputBuffer;
+    private final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
+
+    public EchoServiceHandler(final RingBuffer outputBuffer)
     {
-        super(outputDisruptor);
+        this.outputBuffer = outputBuffer;
     }
 
     @Override
-    protected void process(final InputBufferEvent inputEvent) throws Exception
+    public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
     {
-        final long sequence = nextSequence();
-        try
+        /* ECHO SERVICE message processing: reply the echo message itself */
+
+        while (!outputBuffer.write(MessageTypes.APPLICATION_MSG_ID, buffer, index, length))
         {
-            OutputBufferEvent outputEvent = getEvent(sequence);
-            outputEvent.getBuffer().putBytes(0, inputEvent.getBuffer(), 0, inputEvent.getBuffer().capacity());
+            idleStrategy.idle(0);
         }
-        finally
-        {
-            publish(sequence);
-        }
+    }
+
+    @Override
+    public void close() throws Exception
+    {
     }
 }

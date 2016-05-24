@@ -15,104 +15,91 @@
  */
 package org.helios;
 
-import com.lmax.disruptor.WaitStrategy;
-import com.lmax.disruptor.dsl.Disruptor;
-import com.lmax.disruptor.dsl.ProducerType;
-import org.helios.core.engine.InputBufferEvent;
-import org.helios.core.engine.OutputBufferEvent;
-import org.helios.core.engine.ServiceHandler;
-import org.helios.core.engine.ServiceHandlerFactory;
-import org.helios.core.journal.Journaller;
-import org.helios.core.journal.strategy.JournalStrategy;
-import org.helios.core.replica.Replicator;
-import org.helios.gateway.ServiceEventHandler;
-import org.helios.gateway.ServiceEventHandlerFactory;
-import org.helios.gateway.ServiceProxy;
-import org.helios.gateway.ServiceProxyFactory;
-import org.helios.mmb.*;
-import uk.co.real_logic.aeron.Aeron;
-import uk.co.real_logic.aeron.AvailableImageHandler;
-import uk.co.real_logic.aeron.Image;
-import uk.co.real_logic.aeron.UnavailableImageHandler;
-import uk.co.real_logic.aeron.driver.MediaDriver;
-import uk.co.real_logic.aeron.driver.ThreadingMode;
-import uk.co.real_logic.agrona.CloseHelper;
-import uk.co.real_logic.agrona.ErrorHandler;
-import uk.co.real_logic.agrona.concurrent.BackoffIdleStrategy;
-import uk.co.real_logic.agrona.concurrent.NoOpIdleStrategy;
+import io.aeron.*;
+import org.agrona.CloseHelper;
+import org.agrona.ErrorHandler;
+import org.agrona.Verify;
+import org.helios.core.service.Service;
+import org.helios.core.service.ServiceHandler;
+import org.helios.core.service.ServiceHandlerFactory;
+import org.helios.gateway.Gateway;
+import org.helios.gateway.GatewayHandler;
+import org.helios.gateway.GatewayHandlerFactory;
+import org.helios.infra.RateReporter;
+import org.helios.mmb.AvailableAssociationHandler;
+import org.helios.mmb.UnavailableAssociationHandler;
+import org.helios.util.ProcessorHelper;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandler, UnavailableImageHandler
 {
+    public static final String IPC_CHANNEL = CommonContext.IPC_CHANNEL;
+
     private final HeliosContext context;
-    private final MediaDriver mediaDriver;
+    private final HeliosDriver driver;
     private final Aeron aeron;
-    private Journaller inputJournaller;
-    private Replicator replicator;
     private Consumer<Throwable> errorHandler;
     private AvailableAssociationHandler availableAssociationHandler;
     private UnavailableAssociationHandler unavailableAssociationHandler;
-
-    public Helios()
-    {
-        this(new HeliosContext());
-    }
+    private List<Service> serviceList;
+    private List<Gateway<?>> gatewayList;
+    private RateReporter reporter;
 
     public Helios(final HeliosContext context)
     {
-        this(context, new MediaDriver.Context()
-                .threadingMode(ThreadingMode.DEDICATED)
-                .conductorIdleStrategy(new BackoffIdleStrategy(1, 1, 1, 1))
-                .receiverIdleStrategy(new NoOpIdleStrategy())
-                .senderIdleStrategy(new NoOpIdleStrategy()));
+        this(context, new HeliosDriver(context));
     }
 
-    public Helios(final HeliosContext context, final MediaDriver.Context driverContext)
+    public Helios(final HeliosContext context, final HeliosDriver driver)
     {
         this.context = context;
-
-        String mediaDriverConf = context.getMediaDriverConf();
-        if (mediaDriverConf != null)
-        {
-            MediaDriver.loadPropertiesFile(mediaDriverConf);
-        }
-
-        final boolean embeddedMediaDriver = context.isMediaDriverEmbedded();
-        mediaDriver = embeddedMediaDriver ? MediaDriver.launchEmbedded(driverContext) : null;
+        this.driver = driver;
 
         final Aeron.Context aeronContext = new Aeron.Context().errorHandler(this).availableImageHandler(this).unavailableImageHandler(this);
-        if (embeddedMediaDriver)
+        if (context.isMediaDriverEmbedded())
         {
-            aeronContext.aeronDirectoryName(mediaDriver.aeronDirectoryName());
+            aeronContext.aeronDirectoryName(driver.mediaDriver().aeronDirectoryName());
         }
         aeron = Aeron.connect(aeronContext);
 
-        final boolean journalEnabled = context.isJournalEnabled();
-        if (journalEnabled)
-        {
-            final JournalStrategy journalStrategy = context.getJournalStrategy();
-            final boolean flushingEnabled = context.isJournalFlushingEnabled();
-            inputJournaller = new Journaller(journalStrategy, flushingEnabled);
-        }
-
-        final boolean replicaEnabled = context.isReplicaEnabled();
-        if (replicaEnabled)
-        {
-            replicator = new Replicator(aeron);
-        }
-
         errorHandler = System.err::println;
+
+        serviceList = new ArrayList<>();
+        gatewayList = new ArrayList<>();
+
+        reporter = context.isReportingEnabled() ? new RateReporter() : null;
+    }
+
+    public void start()
+    {
+        gatewayList.forEach(Gateway::start);
+        serviceList.forEach(Service::start);
+
+        ProcessorHelper.start(reporter);
     }
 
     @Override
     public void close() throws Exception
     {
+        CloseHelper.quietClose(reporter);
+
+        for (Gateway<?> gw : gatewayList)
+        {
+            gw.close();
+        }
+        gatewayList.clear();
+
+        for (Service svc : serviceList)
+        {
+            svc.close();
+        }
+        serviceList.clear();
+
         CloseHelper.quietClose(aeron);
-        CloseHelper.quietClose(mediaDriver);
+        CloseHelper.quietClose(driver);
     }
 
     @Override
@@ -157,78 +144,64 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         return this;
     }
 
-    public InputGear addInputGear(int bufferSize, final String channel, int streamId)
+    public AeronStream newStream(final String channel, final int streamId)
     {
-        final ThreadFactory threadFactory = Executors.privilegedThreadFactory();
-        final WaitStrategy strategy = context.getInputWaitStrategy();
-        final Disruptor<InputBufferEvent> disruptor = new Disruptor<>(InputBufferEvent::new, bufferSize, threadFactory, ProducerType.SINGLE, strategy);
+        Verify.notNull(channel, "channel");
 
-        return new InputGear(disruptor, aeron, channel, streamId);
+        return new AeronStream(aeron, channel, streamId);
     }
 
-    public OutputGear addOutputGear(int bufferSize, final String channel, int streamId)
+    public <T extends ServiceHandler> Service addEmbeddedService(
+        final int reqStreamId, final int rspStreamId, final ServiceHandlerFactory<T> factory)
     {
-        final ThreadFactory threadFactory = Executors.privilegedThreadFactory();
-        final WaitStrategy strategy = context.getOutputWaitStrategy();
-        final Disruptor<OutputBufferEvent> disruptor = new Disruptor<>(OutputBufferEvent::new, bufferSize, threadFactory, ProducerType.SINGLE, strategy);
+        final AeronStream reqStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, reqStreamId);
+        final AeronStream rspStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, rspStreamId);
 
-        return new OutputGear(disruptor, aeron, channel, streamId);
+        return addService(reqStream, rspStream, factory);
     }
 
-    public ServiceHandler addServiceHandler(final ServiceHandlerFactory factory, final InputGear inputGear, final OutputGear outputGear)
+    public <T extends ServiceHandler> Service addService(final AeronStream reqStream, final AeronStream rspStream,
+        final ServiceHandlerFactory<T> factory)
     {
-        final ServiceHandler serviceHandler = factory.createServiceHandler(this, outputGear);
+        Verify.notNull(reqStream, "reqStream");
+        Verify.notNull(rspStream, "rspStream");
+        Verify.notNull(factory, "factory");
 
-        if (inputJournaller != null)
+        final Service svc = new HeliosService<>(context, reqStream, rspStream, factory);
+        serviceList.add(svc);
+
+        if (reporter != null)
         {
-            if (replicator != null)
-            {
-                inputGear.getDisruptor().handleEventsWith(inputJournaller, replicator).handleEventsWith(serviceHandler);
-            }
-            else
-            {
-                inputGear.getDisruptor().handleEventsWith(inputJournaller).then(serviceHandler);
-            }
-        }
-        else
-        {
-            if (replicator != null)
-            {
-                inputGear.getDisruptor().handleEventsWith(replicator).then(serviceHandler);
-            }
-            else
-            {
-                inputGear.getDisruptor().handleEventsWith(serviceHandler);
-            }
+            reporter.add(svc.report());
         }
 
-        return serviceHandler;
+        return svc;
     }
 
-    public <T extends ServiceProxy> T addServiceProxy(final ServiceProxyFactory<T> factory,
-                                                      final String inputChannel, int inputStreamId,
-                                                      final String outputChannel, int outputStreamId)
+    public <T extends GatewayHandler> Gateway<T> addEmbeddedGateway(
+        final int reqStreamId, final int rspStreamId, final GatewayHandlerFactory<T> factory)
     {
-        final AtomicBoolean running = new AtomicBoolean(true);
+        final AeronStream reqStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, reqStreamId);
+        final AeronStream rspStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, rspStreamId);
 
-        final AeronSubscriber busSubscriber = new AeronSubscriber(running, aeron, inputChannel, inputStreamId);
-        final AeronPublisher busPublisher = new AeronPublisher(aeron, outputChannel, outputStreamId);
-
-        return factory.createServiceProxy(this, busSubscriber, busPublisher);
+        return addGateway(reqStream, rspStream, factory);
     }
 
-    public ServiceEventHandler addServiceEventHandler(final ServiceEventHandlerFactory factory, final InputGear inputGear)
+    public <T extends GatewayHandler> Gateway<T> addGateway(final AeronStream reqStream, final AeronStream rspStream,
+        final GatewayHandlerFactory<T> factory)
     {
-        final ServiceEventHandler serviceEventHandler = factory.createServiceEventHandler(this, inputGear);
+        Verify.notNull(reqStream, "reqStream");
+        Verify.notNull(rspStream, "rspStream");
+        Verify.notNull(factory, "factory");
 
-        inputGear.getDisruptor().handleEventsWith(serviceEventHandler);
+        final Gateway<T> gw = new HeliosGateway<>(context, reqStream, rspStream, factory);
+        gatewayList.add(gw);
 
-        return serviceEventHandler;
-    }
+        if (reporter != null)
+        {
+            reporter.add(gw.report());
+        }
 
-    @Override
-    public String toString()
-    {
-        return "H: mediaDriver=" + mediaDriver + " aeron=" + aeron + " replicator=" + replicator;
+        return gw;
     }
 }

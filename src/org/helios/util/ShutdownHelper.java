@@ -1,6 +1,6 @@
 package org.helios.util;
 
-import uk.co.real_logic.agrona.concurrent.SigInt;
+import org.agrona.concurrent.SigInt;
 
 public class ShutdownHelper
 {

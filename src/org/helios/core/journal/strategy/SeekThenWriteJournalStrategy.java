@@ -17,6 +17,12 @@ public final class SeekThenWriteJournalStrategy extends AbstractJournalStrategy<
     }
 
     @Override
+    public void read(final ByteBuffer data) throws IOException
+    {
+
+    }
+
+    @Override
     public void write(final ByteBuffer data) throws IOException
     {
         positionInFile += data.remaining();

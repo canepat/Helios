@@ -5,6 +5,10 @@ import java.nio.ByteBuffer;
 
 public interface JournalStrategy extends AutoCloseable
 {
+    void open();
+
+    void read(final ByteBuffer data) throws IOException;
+
     void write(final ByteBuffer data) throws IOException;
 
     void reset();

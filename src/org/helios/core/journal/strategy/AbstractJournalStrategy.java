@@ -1,8 +1,8 @@
 package org.helios.core.journal.strategy;
 
 import org.helios.core.journal.util.JournalAllocator;
-import uk.co.real_logic.agrona.CloseHelper;
-import uk.co.real_logic.agrona.LangUtil;
+import org.agrona.CloseHelper;
+import org.agrona.LangUtil;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -18,7 +18,11 @@ public abstract class AbstractJournalStrategy<T extends Closeable> implements Jo
     {
         this.fileSize = fileSize;
         this.journalAllocator = journalAllocator;
+    }
 
+    @Override
+    public void open()
+    {
         try
         {
             journalAllocator.preallocate(fileSize);

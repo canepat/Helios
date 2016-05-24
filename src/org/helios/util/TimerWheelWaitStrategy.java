@@ -4,7 +4,7 @@ import com.lmax.disruptor.AlertException;
 import com.lmax.disruptor.Sequence;
 import com.lmax.disruptor.SequenceBarrier;
 import com.lmax.disruptor.WaitStrategy;
-import uk.co.real_logic.agrona.TimerWheel;
+import org.agrona.TimerWheel;
 
 public class TimerWheelWaitStrategy implements WaitStrategy
 {

@@ -1,6 +1,6 @@
 package org.helios.core.journal.snapshot;
 
-import uk.co.real_logic.agrona.TimerWheel;
+import org.agrona.TimerWheel;
 
 import java.time.Duration;
 import java.time.LocalDateTime;

@@ -19,6 +19,12 @@ public final class PositionalWriteJournalStrategy extends AbstractJournalStrateg
     }
 
     @Override
+    public void read(final ByteBuffer data) throws IOException
+    {
+
+    }
+
+    @Override
     public void write(final ByteBuffer data) throws IOException
     {
         positionInFile += data.remaining();
