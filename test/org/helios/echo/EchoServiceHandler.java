@@ -20,7 +20,7 @@ public class EchoServiceHandler implements ServiceHandler
     @Override
     public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
     {
-        /* ECHO SERVICE message processing: reply the echo message itself */
+        /* ECHO SERVICE message processing: reply the received message itself */
 
         while (!outputBuffer.write(MessageTypes.APPLICATION_MSG_ID, buffer, index, length))
         {

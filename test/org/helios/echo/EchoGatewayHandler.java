@@ -30,7 +30,7 @@ public class EchoGatewayHandler implements GatewayHandler
     @Override
     public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
     {
-        /* ECHO GATEWAY message processing: store last echo timestamp and send another one */
+        /* ECHO GATEWAY message processing: store last echo timestamp */
 
         final long echoTimestamp = buffer.getLong(index);
 
