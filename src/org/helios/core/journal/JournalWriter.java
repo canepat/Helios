@@ -6,7 +6,6 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.journal.strategy.JournalStrategy;
 import org.helios.core.journal.util.AllocationMode;
 
 import java.io.IOException;
@@ -18,22 +17,22 @@ import static org.helios.core.journal.JournalRecordDescriptor.*;
 public class JournalWriter implements MessageHandler, AutoCloseable
 {
     private final RingBuffer nextRingBuffer;
-    private final JournalStrategy journalStrategy;
+    private final Journalling journalling;
     private final boolean flushing;
     private final ByteBuffer batchingBuffer;
     private long writeDuration;
     private long bytesWritten;
     private final IdleStrategy idleStrategy;
 
-    public JournalWriter(final JournalStrategy journalStrategy, final AllocationMode allocationMode, final int pageSize,
+    public JournalWriter(final Journalling journalling, final AllocationMode allocationMode, final int pageSize,
         final boolean flushing, final RingBuffer nextRingBuffer, final IdleStrategy idleStrategy)
     {
-        this.journalStrategy = journalStrategy;
+        this.journalling = journalling;
         this.flushing = flushing;
         this.nextRingBuffer = nextRingBuffer;
         this.idleStrategy = idleStrategy;
 
-        journalStrategy.open(allocationMode);
+        journalling.open(allocationMode);
 
         batchingBuffer = ByteBuffer.allocate(pageSize); // TODO: can be improved with DirectBuffer?
     }
@@ -47,7 +46,7 @@ public class JournalWriter implements MessageHandler, AutoCloseable
 
             final int messageSize = MESSAGE_FRAME_SIZE + length;
 
-            journalStrategy.ensure(messageSize);
+            journalling.ensure(messageSize);
 
             if (batchingBuffer.remaining() < MESSAGE_HEADER_SIZE)
             {
@@ -80,7 +79,7 @@ public class JournalWriter implements MessageHandler, AutoCloseable
             if (flushing)
             {
                 writeBatchingBuffer();
-                journalStrategy.flush();
+                journalling.flush();
             }
         }
         catch (Exception ex)
@@ -100,9 +99,9 @@ public class JournalWriter implements MessageHandler, AutoCloseable
     public void close() throws Exception
     {
         writeBatchingBuffer();
-        journalStrategy.flush();
+        journalling.flush();
 
-        CloseHelper.quietClose(journalStrategy);
+        CloseHelper.quietClose(journalling);
     }
 
     @Override
@@ -116,7 +115,7 @@ public class JournalWriter implements MessageHandler, AutoCloseable
     private int writeBatchingBuffer() throws IOException
     {
         batchingBuffer.flip();
-        int bytesWritten = journalStrategy.write(batchingBuffer);
+        int bytesWritten = journalling.write(batchingBuffer);
         batchingBuffer.clear();
 
         return bytesWritten;

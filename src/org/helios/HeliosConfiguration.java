@@ -2,8 +2,8 @@ package org.helios;
 
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.YieldingWaitStrategy;
-import org.helios.core.journal.strategy.JournalStrategy;
-import org.helios.core.journal.strategy.PositionalWriteJournalStrategy;
+import org.helios.core.journal.Journalling;
+import org.helios.core.journal.strategy.PositionalJournalling;
 import org.agrona.LangUtil;
 import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
@@ -49,7 +49,7 @@ public class HeliosConfiguration
     public static final long MIN_PARK_NS = getLong("helios.core.back_off.idle.strategy.min_park_ns", 1000);
     public static final long MAX_PARK_NS = getLong("helios.core.back_off.idle.strategy.max_park_ns", 100000);
 
-    public static JournalStrategy journalStrategy()
+    public static Journalling journalStrategy()
     {
         return newJournalStrategy(JOURNAL_STRATEGY);
     }
@@ -84,23 +84,23 @@ public class HeliosConfiguration
         return newWaitStrategy(OUTPUT_WAIT_STRATEGY);
     }
 
-    private static JournalStrategy newJournalStrategy(final String strategyClassName)
+    private static Journalling newJournalStrategy(final String journallingClassName)
     {
         final Path journalDir = Paths.get(JOURNAL_DIR_NAME);
 
-        JournalStrategy journalStrategy = null;
+        Journalling journalling = null;
 
-        if (strategyClassName == null)
+        if (journallingClassName == null)
         {
-            journalStrategy = new PositionalWriteJournalStrategy(journalDir, JOURNAL_FILE_SIZE, JOURNAL_FILE_COUNT);
+            journalling = new PositionalJournalling(journalDir, JOURNAL_FILE_SIZE, JOURNAL_FILE_COUNT);
         }
         else
         {
             try
             {
-                journalStrategy = (JournalStrategy)Class.forName(strategyClassName)
+                journalling = (Journalling)Class.forName(journallingClassName)
                     .getConstructor(Path.class, Long.class, Integer.class)
-                    .newInstance(journalDir, JOURNAL_FILE_SIZE, JOURNAL_FILE_COUNT);
+                        .newInstance(journalDir, JOURNAL_FILE_SIZE, JOURNAL_FILE_COUNT);
             }
             catch (final Exception ex)
             {
@@ -108,7 +108,7 @@ public class HeliosConfiguration
             }
         }
 
-        return journalStrategy;
+        return journalling;
     }
 
     private static IdleStrategy newIdleStrategy(final String strategyClassName)

@@ -9,9 +9,9 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.function.Function;
 
-public final class SeekThenWriteJournalStrategy extends AbstractJournalStrategy<RandomAccessFile>
+public final class SeekJournalling extends AbstractJournalling<RandomAccessFile>
 {
-    public SeekThenWriteJournalStrategy(final Path journalDir, final long journalSize, final int journalCount)
+    public SeekJournalling(final Path journalDir, final long journalSize, final int journalCount)
     {
         super(journalSize, new JournalAllocator<>(journalDir, journalCount, randomAccessFileFactory()));
     }

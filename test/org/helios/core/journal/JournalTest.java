@@ -1,6 +1,5 @@
 package org.helios.core.journal;
 
-import org.HdrHistogram.Histogram;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
@@ -9,16 +8,15 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.core.MessageTypes;
-import org.helios.core.journal.strategy.JournalStrategy;
-import org.helios.core.journal.strategy.PositionalWriteJournalStrategy;
+import org.helios.core.journal.measurement.OutputFormat;
+import org.helios.core.journal.measurement.MeasuredJournalling;
+import org.helios.core.journal.strategy.PositionalJournalling;
 import org.helios.core.journal.util.AllocationMode;
-import org.helios.infra.Processor;
 import org.helios.util.Check;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.lang.System.nanoTime;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
@@ -29,7 +27,7 @@ public class JournalTest
     private static final int NUMBER_OF_ITERATIONS = JournalConfiguration.NUMBER_OF_ITERATIONS;
     private static final int NUMBER_OF_MESSAGES = JournalConfiguration.NUMBER_OF_MESSAGES;
 
-    private static final Histogram HISTOGRAM = new Histogram(TimeUnit.SECONDS.toNanos(10), 3);
+    //private static final Histogram HISTOGRAM = new Histogram(TimeUnit.SECONDS.toNanos(10), 3);
 
     public static void main(String[] args) throws Exception
     {
@@ -39,8 +37,10 @@ public class JournalTest
         final boolean journalFlushing = false;
         final int journalPageSize = 4*1024;
 
-        final JournalStrategy journalStrategy = new PositionalWriteJournalStrategy(
-            Paths.get(journalDir), journalFileSize, journalFileCount);
+        final Journalling journalling = new MeasuredJournalling(
+            new PositionalJournalling(Paths.get(journalDir), journalFileSize, journalFileCount),
+            OutputFormat.LONG,
+            true);
 
         final ByteBuffer inputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH);
         final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
@@ -50,7 +50,7 @@ public class JournalTest
 
         final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
-        final JournalWriter journalWriter = new JournalWriter(journalStrategy, AllocationMode.ZEROED_ALLOCATION,
+        final JournalWriter journalWriter = new JournalWriter(journalling, AllocationMode.ZEROED_ALLOCATION,
             journalPageSize, journalFlushing, outputRingBuffer, idleStrategy);
         final JournalProcessor journalProcessor = new JournalProcessor(inputRingBuffer, idleStrategy, journalWriter);
 
@@ -61,7 +61,7 @@ public class JournalTest
 
         for (int iteration = 1; iteration <= NUMBER_OF_ITERATIONS; iteration++)
         {
-            HISTOGRAM.reset();
+            //HISTOGRAM.reset();
 
             final long startTime = nanoTime();
 
@@ -78,19 +78,20 @@ public class JournalTest
                     iteration, NUMBER_OF_MESSAGES, elapsedTime, TimeUnit.NANOSECONDS.toMillis(elapsedTime),
                     ((double)NUMBER_OF_MESSAGES / (double)elapsedTime) * 1_000_000_000));
 
-            System.out.println("Histogram of Journal latencies in microseconds");
-            HISTOGRAM.outputPercentileDistribution(System.out, 1000.0);
+            //System.out.println("Histogram of Journal latencies in microseconds");
+            //HISTOGRAM.outputPercentileDistribution(System.out, 1000.0);
+            //journalling.reset();
         }
 
-        c.close();
-        p.close();
         journalProcessor.close();
 
-        final JournalPlayer journalPlayer = new JournalPlayer(outputRingBuffer, journalStrategy, journalPageSize);
+        System.out.println();
+
+        final JournalPlayer journalPlayer = new JournalPlayer(outputRingBuffer, journalling, journalPageSize);
 
         for (int iteration = 1; iteration <= NUMBER_OF_ITERATIONS; iteration++)
         {
-            HISTOGRAM.reset();
+            //HISTOGRAM.reset();
 
             final long startTime = nanoTime();
 
@@ -106,33 +107,28 @@ public class JournalTest
                     iteration, journalPlayer.messagesReplayed(), elapsedTime, TimeUnit.NANOSECONDS.toMillis(elapsedTime),
                     ((double)journalPlayer.messagesReplayed() / (double)elapsedTime) * 1_000_000_000));
 
-            System.out.println("Histogram of Journal latencies in microseconds");
-            HISTOGRAM.outputPercentileDistribution(System.out, 1000.0);
+            //System.out.println("Histogram of Journal latencies in microseconds");
+            //HISTOGRAM.outputPercentileDistribution(System.out, 1000.0);
+            //journalling.reset();
         }
 
-        c.close();
         journalPlayer.close();
     }
 
-    private static class Producer implements Processor
+    private static class Producer implements Runnable
     {
         private final RingBuffer inputRingBuffer;
         private final int numMessages;
-        private final AtomicBoolean running;
         private Thread producerThread;
 
         Producer(final RingBuffer inputRingBuffer, final int numMessages)
         {
             this.inputRingBuffer = inputRingBuffer;
             this.numMessages = numMessages;
-
-            running = new AtomicBoolean(false);
         }
 
-        @Override
         public void start()
         {
-            running.set(true);
             producerThread = new Thread(this, "producer");
             producerThread.start();
         }
@@ -143,10 +139,8 @@ public class JournalTest
             final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
             final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(MESSAGE_LENGTH));
 
-            int messageNumber = 0;
-            while (running.get() && messageNumber < numMessages)
+            for (int messageNumber = 1; messageNumber <= numMessages; messageNumber++)
             {
-                messageNumber++;
                 final long timestamp = System.nanoTime();
 
                 buffer.putInt(0, messageNumber);
@@ -165,20 +159,12 @@ public class JournalTest
         {
             producerThread.join();
         }
-
-        @Override
-        public void close() throws Exception
-        {
-            running.set(false);
-            producerThread.join();
-        }
     }
 
-    private static class Consumer implements Processor, MessageHandler
+    private static class Consumer implements Runnable, MessageHandler
     {
         private final RingBuffer outputRingBuffer;
         private final int numMessages;
-        private final AtomicBoolean running;
         private Thread consumerThread;
         private int messageCount;
 
@@ -186,16 +172,12 @@ public class JournalTest
         {
             this.outputRingBuffer = outputRingBuffer;
             this.numMessages = numMessages;
-
-            running = new AtomicBoolean(false);
         }
 
-        @Override
         public void start()
         {
             messageCount = 0;
 
-            running.set(true);
             consumerThread = new Thread(this, "consumer");
             consumerThread.start();
         }
@@ -205,7 +187,7 @@ public class JournalTest
         {
             final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
-            while (running.get() && messageCount < numMessages)
+            while (messageCount < numMessages)
             {
                 final int bytesRead = outputRingBuffer.read(this);
                 idleStrategy.idle(bytesRead);
@@ -227,15 +209,9 @@ public class JournalTest
 
             //System.out.println(String.format("Consumer: messageNumber=%d startTimestamp=%d", messageNumber, timestamp));
             Check.enforce(messageNumber == messageCount, String.format("Unexpected messageNumber=%d", messageNumber));
+            Check.enforce(timestamp > 0, String.format("Unexpected timestamp=%d", timestamp));
 
             //HISTOGRAM.recordValue(nanoTime() - timestamp);
-        }
-
-        @Override
-        public void close() throws Exception
-        {
-            running.set(false);
-            consumerThread.join();
         }
     }
 }

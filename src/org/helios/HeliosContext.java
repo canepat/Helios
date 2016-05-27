@@ -1,7 +1,7 @@
 package org.helios;
 
 import org.agrona.concurrent.IdleStrategy;
-import org.helios.core.journal.strategy.JournalStrategy;
+import org.helios.core.journal.Journalling;
 
 public class HeliosContext
 {
@@ -16,7 +16,7 @@ public class HeliosContext
     private String replicaChannel;
     private int replicaStreamId;
 
-    private JournalStrategy journalStrategy;
+    private Journalling journalling;
     private IdleStrategy readIdleStrategy;
     private IdleStrategy writeIdleStrategy;
     private IdleStrategy publisherIdleStrategy;
@@ -96,9 +96,9 @@ public class HeliosContext
         return this;
     }
 
-    public HeliosContext setJournalStrategy(JournalStrategy journalStrategy)
+    public HeliosContext setJournalStrategy(Journalling journalling)
     {
-        this.journalStrategy = journalStrategy;
+        this.journalling = journalling;
         return this;
     }
 
@@ -171,9 +171,9 @@ public class HeliosContext
         return replicaStreamId;
     }
 
-    public JournalStrategy journalStrategy()
+    public Journalling journalStrategy()
     {
-        return journalStrategy;
+        return journalling;
     }
 
     public IdleStrategy readIdleStrategy()

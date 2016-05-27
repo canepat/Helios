@@ -1,4 +1,4 @@
-package org.helios.core.journal.snapshot;
+package org.helios.core.snapshot;
 
 import org.agrona.TimerWheel;
 

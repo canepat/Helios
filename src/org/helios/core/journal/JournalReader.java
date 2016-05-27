@@ -4,7 +4,6 @@ import org.agrona.CloseHelper;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.helios.core.journal.strategy.JournalStrategy;
 import org.helios.util.DirectBufferAllocator;
 
 import java.nio.ByteBuffer;
@@ -13,19 +12,17 @@ import static org.helios.core.journal.JournalRecordDescriptor.*;
 
 public class JournalReader implements AutoCloseable
 {
-    private final JournalStrategy journalStrategy;
+    private final Journalling journalling;
     private final MutableDirectBuffer readBuffer1;
     private final MutableDirectBuffer readBuffer2;
     private MutableDirectBuffer currentReadBuffer;
 
-    public JournalReader(final JournalStrategy journalStrategy, final int pageSize)
+    public JournalReader(final Journalling journalling, final int pageSize)
     {
-        this.journalStrategy = journalStrategy;
+        this.journalling = journalling;
 
         readBuffer1 = new UnsafeBuffer(DirectBufferAllocator.allocate(pageSize));
-        //readBuffer1 = new UnsafeBuffer(ByteBuffer.allocate(pageSize));
         readBuffer2 = new UnsafeBuffer(DirectBufferAllocator.allocate(pageSize));
-        //readBuffer2 = new UnsafeBuffer(ByteBuffer.allocate(pageSize));
 
         currentReadBuffer = readBuffer1;
     }
@@ -41,12 +38,12 @@ public class JournalReader implements AutoCloseable
         {
             final ByteBuffer buffer = currentReadBuffer.byteBuffer();
 
-            bytesRead = journalStrategy.read(buffer);
+            bytesRead = journalling.read(buffer);
 
             buffer.flip();
 
-            lastJournalReached = journalStrategy.nextJournalNumber() == 0;
-            nextBlockWillRoll = journalStrategy.position() + currentReadBuffer.capacity() > journalStrategy.size();
+            lastJournalReached = journalling.nextJournalNumber() == 0;
+            nextBlockWillRoll = journalling.position() + currentReadBuffer.capacity() > journalling.size();
 
             while (buffer.remaining() > 0)
             {
@@ -97,7 +94,7 @@ public class JournalReader implements AutoCloseable
     @Override
     public void close() throws Exception
     {
-        CloseHelper.quietClose(journalStrategy);
+        CloseHelper.quietClose(journalling);
         DirectBufferAllocator.free(readBuffer1.byteBuffer());
         DirectBufferAllocator.free(readBuffer2.byteBuffer());
     }

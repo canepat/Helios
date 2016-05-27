@@ -9,9 +9,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.function.Function;
 
-public final class PositionalWriteJournalStrategy extends AbstractJournalStrategy<FileChannel>
+public final class PositionalJournalling extends AbstractJournalling<FileChannel>
 {
-    public PositionalWriteJournalStrategy(final Path journalDir, final long journalSize, final int journalCount)
+    public PositionalJournalling(final Path journalDir, final long journalSize, final int journalCount)
     {
         super(journalSize, new JournalAllocator<>(journalDir, journalCount, fileChannelFactory()));
     }

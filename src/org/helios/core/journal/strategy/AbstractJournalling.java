@@ -1,5 +1,6 @@
 package org.helios.core.journal.strategy;
 
+import org.helios.core.journal.Journalling;
 import org.helios.core.journal.util.AllocationMode;
 import org.helios.core.journal.util.JournalAllocator;
 import org.agrona.CloseHelper;
@@ -8,14 +9,14 @@ import org.agrona.LangUtil;
 import java.io.Closeable;
 import java.io.IOException;
 
-public abstract class AbstractJournalStrategy<T extends Closeable> implements JournalStrategy
+public abstract class AbstractJournalling<T extends Closeable> implements Journalling
 {
     private final long fileSize;
     protected final JournalAllocator<T> journalAllocator;
     protected T currentJournal;
     protected long positionInFile;
 
-    protected AbstractJournalStrategy(final long fileSize, final JournalAllocator<T> journalAllocator)
+    protected AbstractJournalling(final long fileSize, final JournalAllocator<T> journalAllocator)
     {
         this.fileSize = fileSize;
         this.journalAllocator = journalAllocator;
@@ -53,16 +54,10 @@ public abstract class AbstractJournalStrategy<T extends Closeable> implements Jo
     }
 
     @Override
-    public void reset()
+    public void close() throws IOException
     {
         positionInFile = 0;
         journalAllocator.reset();
-    }
-
-    @Override
-    public void close() throws IOException
-    {
-        reset();
 
         currentJournal.close();
         currentJournal = null;
