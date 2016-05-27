@@ -10,16 +10,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class JournalProcessor implements Processor
 {
     private final RingBuffer inputRingBuffer;
-    private final JournalWriter journalWriter;
+    private final JournalHandler journalHandler;
     private final AtomicBoolean running;
     private final Thread journallerThread;
     private final IdleStrategy idleStrategy;
 
-    public JournalProcessor(final RingBuffer inputRingBuffer, final IdleStrategy idleStrategy, final JournalWriter journalWriter)
+    public JournalProcessor(final RingBuffer inputRingBuffer, final IdleStrategy idleStrategy, final JournalHandler journalHandler)
     {
         this.inputRingBuffer = inputRingBuffer;
         this.idleStrategy = idleStrategy;
-        this.journalWriter = journalWriter;
+        this.journalHandler = journalHandler;
 
         running = new AtomicBoolean(false);
         journallerThread = new Thread(this, "journalProcessor");
@@ -37,7 +37,7 @@ public class JournalProcessor implements Processor
     {
         while (running.get())
         {
-            final int bytesRead = inputRingBuffer.read(journalWriter);
+            final int bytesRead = inputRingBuffer.read(journalHandler);
             idleStrategy.idle(bytesRead);
         }
     }
@@ -48,6 +48,6 @@ public class JournalProcessor implements Processor
         running.set(false);
         journallerThread.join();
 
-        CloseHelper.quietClose(journalWriter);
+        CloseHelper.quietClose(journalHandler);
     }
 }

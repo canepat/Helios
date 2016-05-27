@@ -3,7 +3,6 @@ package org.helios.core.journal;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
@@ -15,12 +14,11 @@ public class JournalPlayer implements Runnable, MessageHandler, AutoCloseable
     private final IdleStrategy idleStrategy;
     private int messagesReplayed;
 
-    public JournalPlayer(final RingBuffer inputRingBuffer, final Journalling journalling, final int pageSize)
+    public JournalPlayer(final JournalReader journalReader, final RingBuffer inputRingBuffer, final IdleStrategy idleStrategy)
     {
+        this.journalReader = journalReader;
         this.inputRingBuffer = inputRingBuffer;
-
-        journalReader = new JournalReader(journalling, pageSize);
-        idleStrategy = new BusySpinIdleStrategy();
+        this.idleStrategy = idleStrategy;
     }
 
     @Override

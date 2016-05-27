@@ -1,4 +1,4 @@
-package org.helios.core.journal;
+package journal;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.BusySpinIdleStrategy;
@@ -8,11 +8,12 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.core.MessageTypes;
+import org.helios.core.journal.*;
 import org.helios.core.journal.measurement.MeasuredJournalling;
 import org.helios.core.journal.measurement.OutputFormat;
 import org.helios.core.journal.strategy.PositionalJournalling;
-import org.helios.core.journal.util.AllocationMode;
 import org.helios.util.Check;
+import org.helios.util.DirectBufferAllocator;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
@@ -30,7 +31,7 @@ public class JournalTest
     public static void main(String[] args) throws Exception
     {
         final String journalDir = "./runtime";
-        final long journalFileSize = 400*1024*1024;
+        final long journalFileSize = 1024*1024*1024;
         final int journalFileCount = 1;
         final boolean journalFlushing = false;
         final int journalPageSize = 4*1024;
@@ -40,17 +41,17 @@ public class JournalTest
             OutputFormat.LONG,
             true);
 
-        final ByteBuffer inputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH);
+        final ByteBuffer inputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH);
         final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
 
-        final ByteBuffer outputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH);
+        final ByteBuffer outputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH);
         final RingBuffer outputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(outputBuffer));
 
         final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
-        final JournalWriter journalWriter = new JournalWriter(journalling, AllocationMode.ZEROED_ALLOCATION,
-            journalPageSize, journalFlushing, outputRingBuffer, idleStrategy);
-        final JournalProcessor journalProcessor = new JournalProcessor(inputRingBuffer, idleStrategy, journalWriter);
+        final JournalWriter journalWriter = new JournalWriter(journalling, journalPageSize, journalFlushing);
+        final JournalHandler journalHandler = new JournalHandler(journalWriter, outputRingBuffer, idleStrategy);
+        final JournalProcessor journalProcessor = new JournalProcessor(inputRingBuffer, idleStrategy, journalHandler);
 
         final Producer p = new Producer(inputRingBuffer, NUMBER_OF_MESSAGES);
         final Consumer c = new Consumer(outputRingBuffer, NUMBER_OF_MESSAGES);
@@ -79,7 +80,8 @@ public class JournalTest
 
         System.out.println();
 
-        final JournalPlayer journalPlayer = new JournalPlayer(outputRingBuffer, journalling, journalPageSize);
+        final JournalReader journalReader = new JournalReader(journalling, journalPageSize);
+        final JournalPlayer journalPlayer = new JournalPlayer(journalReader, outputRingBuffer, idleStrategy);
 
         for (int iteration = 1; iteration <= NUMBER_OF_ITERATIONS; iteration++)
         {
@@ -127,7 +129,7 @@ public class JournalTest
         public void run()
         {
             final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
-            final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(MESSAGE_LENGTH));
+            final UnsafeBuffer buffer = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(MESSAGE_LENGTH));
 
             for (int messageNumber = 1; messageNumber <= numMessages; messageNumber++)
             {

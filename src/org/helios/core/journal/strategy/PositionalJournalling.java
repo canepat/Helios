@@ -6,11 +6,26 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.function.Function;
+
+import static java.nio.file.StandardOpenOption.*;
 
 public final class PositionalJournalling extends AbstractJournalling<FileChannel>
 {
+    public static Function<Path, FileChannel> fileChannelFactory()
+    {
+        return (path) -> {
+            try
+            {
+                return FileChannel.open(path, CREATE, READ, WRITE);
+            }
+            catch (IOException e)
+            {
+                throw new RuntimeException("Could not open file for writing: " + path.toString());
+            }
+        };
+    }
+
     public PositionalJournalling(final Path journalDir, final long journalSize, final int journalCount)
     {
         super(journalSize, new JournalAllocator<>(journalDir, journalCount, fileChannelFactory()));
@@ -50,19 +65,5 @@ public final class PositionalJournalling extends AbstractJournalling<FileChannel
     public void flush() throws IOException
     {
         currentJournal.force(true);
-    }
-
-    private static Function<Path, FileChannel> fileChannelFactory()
-    {
-        return (path) -> {
-            try
-            {
-                return FileChannel.open(path, StandardOpenOption.READ, StandardOpenOption.WRITE);
-            }
-            catch (IOException e)
-            {
-                throw new RuntimeException("Could not open file for writing: " + path.toString());
-            }
-        };
     }
 }

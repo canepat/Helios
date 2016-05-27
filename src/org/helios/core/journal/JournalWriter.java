@@ -3,10 +3,9 @@ package org.helios.core.journal;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.MessageHandler;
-import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.core.journal.util.AllocationMode;
+import org.helios.util.DirectBufferAllocator;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -16,25 +15,20 @@ import static org.helios.core.journal.JournalRecordDescriptor.*;
 
 public class JournalWriter implements MessageHandler, AutoCloseable
 {
-    private final RingBuffer nextRingBuffer;
     private final Journalling journalling;
     private final boolean flushing;
     private final ByteBuffer batchingBuffer;
     private long writeDuration;
     private long bytesWritten;
-    private final IdleStrategy idleStrategy;
 
-    public JournalWriter(final Journalling journalling, final AllocationMode allocationMode, final int pageSize,
-        final boolean flushing, final RingBuffer nextRingBuffer, final IdleStrategy idleStrategy)
+    public JournalWriter(final Journalling journalling, final int pageSize, final boolean flushing)
     {
         this.journalling = journalling;
         this.flushing = flushing;
-        this.nextRingBuffer = nextRingBuffer;
-        this.idleStrategy = idleStrategy;
 
-        journalling.open(allocationMode);
+        journalling.open(AllocationMode.ZEROED_ALLOCATION);
 
-        batchingBuffer = ByteBuffer.allocate(pageSize); // TODO: can be improved with DirectBuffer?
+        batchingBuffer = DirectBufferAllocator.allocateCacheAligned(pageSize);
     }
 
     @Override
@@ -86,13 +80,6 @@ public class JournalWriter implements MessageHandler, AutoCloseable
         {
             LangUtil.rethrowUnchecked(ex);
         }
-        finally
-        {
-            while (!nextRingBuffer.write(msgTypeId, buffer, index, length))
-            {
-                idleStrategy.idle(0);
-            }
-        }
     }
 
     @Override
@@ -102,6 +89,7 @@ public class JournalWriter implements MessageHandler, AutoCloseable
         journalling.flush();
 
         CloseHelper.quietClose(journalling);
+        DirectBufferAllocator.free(batchingBuffer);
     }
 
     @Override

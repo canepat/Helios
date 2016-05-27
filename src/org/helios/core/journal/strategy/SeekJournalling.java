@@ -11,6 +11,20 @@ import java.util.function.Function;
 
 public final class SeekJournalling extends AbstractJournalling<RandomAccessFile>
 {
+    public static Function<Path, RandomAccessFile> randomAccessFileFactory()
+    {
+        return (path) -> {
+            try
+            {
+                return new RandomAccessFile(path.toString(), "rw");
+            }
+            catch (FileNotFoundException e)
+            {
+                throw new RuntimeException("Could not open file for writing: " + path.toString());
+            }
+        };
+    }
+
     public SeekJournalling(final Path journalDir, final long journalSize, final int journalCount)
     {
         super(journalSize, new JournalAllocator<>(journalDir, journalCount, randomAccessFileFactory()));
@@ -54,19 +68,5 @@ public final class SeekJournalling extends AbstractJournalling<RandomAccessFile>
     public void flush() throws IOException
     {
         currentJournal.getChannel().force(true);
-    }
-
-    private static Function<Path, RandomAccessFile> randomAccessFileFactory()
-    {
-        return (path) -> {
-            try
-            {
-                return new RandomAccessFile(path.toString(), "rw");
-            }
-            catch (FileNotFoundException e)
-            {
-                throw new RuntimeException("Could not open file for writing: " + path.toString());
-            }
-        };
     }
 }

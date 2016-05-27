@@ -6,10 +6,10 @@ import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.journal.JournalWriter;
+import org.helios.core.journal.JournalHandler;
 import org.helios.core.journal.JournalProcessor;
+import org.helios.core.journal.JournalWriter;
 import org.helios.core.journal.Journalling;
-import org.helios.core.journal.util.AllocationMode;
 import org.helios.core.replica.ReplicaHandler;
 import org.helios.core.replica.ReplicaProcessor;
 import org.helios.core.service.*;
@@ -49,13 +49,15 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
         final RingBuffer replicaRingBuffer;
         if (isReplicaEnabled)
         {
+            final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
+
             final AeronStream replicaStream = new AeronStream(reqStream.aeron, context.replicaChannel(), context.replicaStreamId());
 
             final ByteBuffer replicaBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
             replicaRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(replicaBuffer));
 
-            final ReplicaHandler replicaHandler = new ReplicaHandler(replicaRingBuffer, new BusySpinIdleStrategy(), replicaStream);
-            replicaProcessor = new ReplicaProcessor(inputRingBuffer, new BusySpinIdleStrategy(), replicaHandler);
+            final ReplicaHandler replicaHandler = new ReplicaHandler(replicaRingBuffer, idleStrategy, replicaStream);
+            replicaProcessor = new ReplicaProcessor(inputRingBuffer, idleStrategy, replicaHandler);
         }
         else
         {
@@ -67,16 +69,18 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
         if (isJournalEnabled)
         {
             final Journalling journalling = context.journalStrategy();
-            final boolean journalFlushingEnabled = context.isJournalFlushingEnabled();
-            final int journalPageSize = context.journalPageSize();
+            final boolean flushingEnabled = context.isJournalFlushingEnabled();
+            final int pageSize = context.journalPageSize();
+
+            final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
             final ByteBuffer journalBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
             journalRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(journalBuffer));
 
-            final JournalWriter journalWriter = new JournalWriter(journalling, AllocationMode.ZEROED_ALLOCATION,
-                journalPageSize, journalFlushingEnabled, journalRingBuffer, new BusySpinIdleStrategy());
+            final JournalWriter journalWriter = new JournalWriter(journalling, pageSize, flushingEnabled);
+            final JournalHandler journalHandler = new JournalHandler(journalWriter, outputRingBuffer, idleStrategy);
             journalProcessor = new JournalProcessor(isReplicaEnabled ? replicaRingBuffer : inputRingBuffer,
-                new BusySpinIdleStrategy(), journalWriter);
+                idleStrategy, journalHandler);
         }
         else
         {

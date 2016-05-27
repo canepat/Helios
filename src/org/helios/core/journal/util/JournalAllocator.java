@@ -1,6 +1,8 @@
 package org.helios.core.journal.util;
 
+import org.agrona.Verify;
 import org.helios.util.Check;
+import org.helios.util.DirectBufferAllocator;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -9,11 +11,9 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.function.Function;
 
-import static java.nio.ByteBuffer.allocateDirect;
-import static java.nio.channels.FileChannel.open;
+import static java.nio.file.StandardOpenOption.*;
 import static org.helios.core.journal.util.JournalNaming.JOURNAL_FILE_PREFIX;
 
 public final class JournalAllocator<T>
@@ -27,6 +27,9 @@ public final class JournalAllocator<T>
 
     public JournalAllocator(final Path journalDir, final int journalCount, final Function<Path, T> journalFactory)
     {
+        Verify.notNull(journalDir, "journalDir");
+        Verify.notNull(journalFactory, "journalFactory");
+        Check.enforce(journalDir.toFile().exists(), "Non existent journal dir");
         Check.enforce(journalCount > 0, "Invalid non positive journal count");
 
         this.journalDir = journalDir;
@@ -36,6 +39,7 @@ public final class JournalAllocator<T>
 
     public void preallocate(final long fileSize, final AllocationMode allocationMode) throws IOException
     {
+        Verify.notNull(allocationMode, "allocationMode");
         Check.enforce(fileSize > 0, "Invalid non positive journal size");
 
         deleteFiles();
@@ -45,7 +49,8 @@ public final class JournalAllocator<T>
             return;
         }
 
-        final ByteBuffer buffer = allocateDirect(BLOCK_SIZE);
+        final ByteBuffer buffer = DirectBufferAllocator.allocateCacheAligned(BLOCK_SIZE);
+        //final ByteBuffer buffer = DirectBufferAllocator.allocate(BLOCK_SIZE);
         buffer.putInt(0xDEADCAFE);
 
         for (int i = 0; i < journalCount; i++)
@@ -70,11 +75,6 @@ public final class JournalAllocator<T>
         return nextJournalNumber;
     }
 
-    public int journalCount()
-    {
-        return journalCount;
-    }
-
     public void reset()
     {
         nextJournalNumber = 0;
@@ -89,14 +89,9 @@ public final class JournalAllocator<T>
         return nextJournal;
     }
 
-    public T peekNextJournal() throws IOException
-    {
-        return journalFactory.apply(getFilePath(nextJournalNumber));
-    }
-
     private FileChannel createFile(final int number) throws IOException
     {
-        return open(getFilePath(number), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+        return FileChannel.open(getFilePath(number), CREATE, WRITE, TRUNCATE_EXISTING);
     }
 
     private void deleteFiles() throws IOException
