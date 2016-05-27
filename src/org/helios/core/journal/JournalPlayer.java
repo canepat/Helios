@@ -1,20 +1,59 @@
 package org.helios.core.journal;
 
+import org.agrona.CloseHelper;
+import org.agrona.LangUtil;
+import org.agrona.MutableDirectBuffer;
+import org.agrona.concurrent.BusySpinIdleStrategy;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.MessageHandler;
+import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.core.journal.strategy.JournalStrategy;
 
-import java.nio.ByteBuffer;
-
-public class JournalPlayer
+public class JournalPlayer implements Runnable, MessageHandler, AutoCloseable
 {
-    private static final int PAGE_SIZE = Integer.getInteger("helios.core.journal.page_size", 4 * 1024);
+    private final RingBuffer inputRingBuffer;
+    private final JournalReader journalReader;
+    private final IdleStrategy idleStrategy;
+    private int messagesReplayed;
 
-    private final JournalStrategy journalStrategy;
-    private final ByteBuffer readBuffer;
-
-    public JournalPlayer(final JournalStrategy journalStrategy)
+    public JournalPlayer(final RingBuffer inputRingBuffer, final JournalStrategy journalStrategy, final int pageSize)
     {
-        this.journalStrategy = journalStrategy;
+        this.inputRingBuffer = inputRingBuffer;
 
-        readBuffer = ByteBuffer.allocate(PAGE_SIZE); // TODO: can be improved with DirectBuffer?
+        journalReader = new JournalReader(journalStrategy, pageSize);
+        idleStrategy = new BusySpinIdleStrategy();
+    }
+
+    @Override
+    public void run()
+    {
+        try
+        {
+            messagesReplayed = journalReader.readFully(this);
+        }
+        catch (Exception ex)
+        {
+            LangUtil.rethrowUnchecked(ex);
+        }
+    }
+
+    @Override
+    public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
+    {
+        while (!inputRingBuffer.write(msgTypeId, buffer, index, length))
+        {
+            idleStrategy.idle(0);
+        }
+    }
+
+    public int messagesReplayed()
+    {
+        return messagesReplayed;
+    }
+
+    @Override
+    public void close() throws Exception
+    {
+        CloseHelper.quietClose(journalReader);
     }
 }

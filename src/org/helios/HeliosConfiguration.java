@@ -27,6 +27,7 @@ public class HeliosConfiguration
     public static final int JOURNAL_FILE_COUNT = getInteger("helios.core.journal.file_count", 1);
     public static final String JOURNAL_STRATEGY = getProperty("helios.core.journal.strategy");
     public static final boolean JOURNAL_FLUSHING_ENABLED = getBoolean("helios.core.journal.flushing.enabled");
+    public static final int JOURNAL_PAGE_SIZE = getInteger("helios.core.journal.page_size", 4 * 1024);
 
     public static final String REPLICA_CHANNEL = getProperty("helios.core.replica_channel", "udp://localhost:40125");
     public static final int REPLICA_STREAM_ID = getInteger("helios.core.replica_stream_id", 10);

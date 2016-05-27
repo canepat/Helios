@@ -1,15 +1,25 @@
 package org.helios.core.journal.strategy;
 
+import org.helios.core.journal.util.AllocationMode;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public interface JournalStrategy extends AutoCloseable
 {
-    void open();
+    void open(final AllocationMode allocationMode);
 
-    void read(final ByteBuffer data) throws IOException;
+    void ensure(final int dataSize) throws IOException;
 
-    void write(final ByteBuffer data) throws IOException;
+    long position();
+
+    long size() throws IOException;
+
+    int nextJournalNumber();
+
+    int read(final ByteBuffer data) throws IOException;
+
+    int write(final ByteBuffer data) throws IOException;
 
     void reset();
 

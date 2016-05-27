@@ -11,26 +11,39 @@ import java.util.function.Function;
 
 public final class PositionalWriteJournalStrategy extends AbstractJournalStrategy<FileChannel>
 {
-    private long positionInFile;
-
     public PositionalWriteJournalStrategy(final Path journalDir, final long journalSize, final int journalCount)
     {
         super(journalSize, new JournalAllocator<>(journalDir, journalCount, fileChannelFactory()));
     }
 
     @Override
-    public void read(final ByteBuffer data) throws IOException
+    public long size() throws IOException
     {
-
+        return currentJournal.size();
     }
 
     @Override
-    public void write(final ByteBuffer data) throws IOException
+    public int read(final ByteBuffer data) throws IOException
     {
-        positionInFile += data.remaining();
         assignJournal(data.remaining());
 
-        currentJournal.write(data, positionInFile);
+        int bytesRead = currentJournal.read(data, positionInFile);
+
+        positionInFile += bytesRead;
+
+        return bytesRead;
+    }
+
+    @Override
+    public int write(final ByteBuffer data) throws IOException
+    {
+        assignJournal(data.remaining());
+
+        int bytesWritten = currentJournal.write(data, positionInFile);
+
+        positionInFile += bytesWritten;
+
+        return bytesWritten;
     }
 
     @Override
@@ -44,7 +57,7 @@ public final class PositionalWriteJournalStrategy extends AbstractJournalStrateg
         return (path) -> {
             try
             {
-                return FileChannel.open(path, StandardOpenOption.WRITE);
+                return FileChannel.open(path, StandardOpenOption.READ, StandardOpenOption.WRITE);
             }
             catch (IOException e)
             {

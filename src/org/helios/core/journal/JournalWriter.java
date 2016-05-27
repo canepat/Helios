@@ -6,17 +6,17 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.MessageTypes;
 import org.helios.core.journal.strategy.JournalStrategy;
+import org.helios.core.journal.util.AllocationMode;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
-public class JournalHandler implements MessageHandler, AutoCloseable
-{
-    private static final int PAGE_SIZE = Integer.getInteger("helios.core.journal.page_size", 4 * 1024);
-    private static final int BUFFER_LENGTH_SIZE = 4;
+import static org.helios.core.journal.JournalRecordDescriptor.*;
 
+public class JournalWriter implements MessageHandler, AutoCloseable
+{
     private final RingBuffer nextRingBuffer;
     private final JournalStrategy journalStrategy;
     private final boolean flushing;
@@ -25,17 +25,17 @@ public class JournalHandler implements MessageHandler, AutoCloseable
     private long bytesWritten;
     private final IdleStrategy idleStrategy;
 
-    public JournalHandler(final JournalStrategy journalStrategy, final boolean flushing, final RingBuffer nextRingBuffer,
-        final IdleStrategy idleStrategy)
+    public JournalWriter(final JournalStrategy journalStrategy, final AllocationMode allocationMode, final int pageSize,
+        final boolean flushing, final RingBuffer nextRingBuffer, final IdleStrategy idleStrategy)
     {
         this.journalStrategy = journalStrategy;
         this.flushing = flushing;
         this.nextRingBuffer = nextRingBuffer;
         this.idleStrategy = idleStrategy;
 
-        journalStrategy.open();
+        journalStrategy.open(allocationMode);
 
-        batchingBuffer = ByteBuffer.allocate(PAGE_SIZE); // TODO: can be improved with DirectBuffer?
+        batchingBuffer = ByteBuffer.allocate(pageSize); // TODO: can be improved with DirectBuffer?
     }
 
     @Override
@@ -45,33 +45,41 @@ public class JournalHandler implements MessageHandler, AutoCloseable
         {
             final long start = System.nanoTime();
 
-            if (batchingBuffer.remaining() < BUFFER_LENGTH_SIZE)
+            final int messageSize = MESSAGE_FRAME_SIZE + length;
+
+            journalStrategy.ensure(messageSize);
+
+            if (batchingBuffer.remaining() < MESSAGE_HEADER_SIZE)
             {
-                batchingBuffer.flip();
-                journalStrategy.write(batchingBuffer);
-                batchingBuffer.clear();
+                writeBatchingBuffer();
             }
+            batchingBuffer.putInt(MESSAGE_HEAD);
+            batchingBuffer.putInt(msgTypeId);
             batchingBuffer.putInt(length);
 
             for (int i = 0; i < length; i++)
             {
                 if (!batchingBuffer.hasRemaining())
                 {
-                    batchingBuffer.flip();
-                    journalStrategy.write(batchingBuffer);
-                    batchingBuffer.clear();
+                    writeBatchingBuffer();
                 }
 
                 batchingBuffer.put(buffer.getByte(index + i));
             }
 
-            writeDuration += (System.nanoTime() - start);
-            bytesWritten += (BUFFER_LENGTH_SIZE + length);
+            if (batchingBuffer.remaining() < MESSAGE_TRAILER_SIZE)
+            {
+                writeBatchingBuffer();
+            }
+            batchingBuffer.putInt(MESSAGE_TRAIL);
 
-            // Flush if enabled.
-            // TODO: Technical Itch blog 'Improving journalling latency' hints NOT TO USE flush
+            writeDuration += (System.nanoTime() - start);
+            bytesWritten += messageSize;
+
+            // N.B. Technical Itch blog post 'Improving journalling latency' hints NOT TO USE flush.
             if (flushing)
             {
+                writeBatchingBuffer();
                 journalStrategy.flush();
             }
         }
@@ -81,7 +89,7 @@ public class JournalHandler implements MessageHandler, AutoCloseable
         }
         finally
         {
-            while (!nextRingBuffer.write(MessageTypes.APPLICATION_MSG_ID, buffer, index, length))
+            while (!nextRingBuffer.write(msgTypeId, buffer, index, length))
             {
                 idleStrategy.idle(0);
             }
@@ -91,6 +99,9 @@ public class JournalHandler implements MessageHandler, AutoCloseable
     @Override
     public void close() throws Exception
     {
+        writeBatchingBuffer();
+        journalStrategy.flush();
+
         CloseHelper.quietClose(journalStrategy);
     }
 
@@ -100,5 +111,14 @@ public class JournalHandler implements MessageHandler, AutoCloseable
         return String.format("%d bytesWritten, %d ms, rate %.02g bytes/sec", bytesWritten,
             TimeUnit.NANOSECONDS.toMillis(writeDuration),
             ((double) bytesWritten / (double) writeDuration) * 1_000_000_000);
+    }
+
+    private int writeBatchingBuffer() throws IOException
+    {
+        batchingBuffer.flip();
+        int bytesWritten = journalStrategy.write(batchingBuffer);
+        batchingBuffer.clear();
+
+        return bytesWritten;
     }
 }

@@ -1,5 +1,6 @@
 package org.helios.core.journal.strategy;
 
+import org.helios.core.journal.util.AllocationMode;
 import org.helios.core.journal.util.JournalAllocator;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
@@ -21,16 +22,34 @@ public abstract class AbstractJournalStrategy<T extends Closeable> implements Jo
     }
 
     @Override
-    public void open()
+    public void open(final AllocationMode allocationMode)
     {
         try
         {
-            journalAllocator.preallocate(fileSize);
+            journalAllocator.preallocate(fileSize, allocationMode);
         }
         catch (IOException ioe)
         {
             LangUtil.rethrowUnchecked(ioe);
         }
+    }
+
+    @Override
+    public void ensure(int dataSize) throws IOException
+    {
+        assignJournal(dataSize);
+    }
+
+    @Override
+    public long position()
+    {
+        return positionInFile;
+    }
+
+    @Override
+    public int nextJournalNumber()
+    {
+        return journalAllocator.nextJournalNumber();
     }
 
     @Override
@@ -43,31 +62,29 @@ public abstract class AbstractJournalStrategy<T extends Closeable> implements Jo
     @Override
     public void close() throws IOException
     {
+        reset();
+
         currentJournal.close();
+        currentJournal = null;
     }
 
-    protected void assignJournal(final int messageSize) throws IOException
+    protected void assignJournal(final int dataSize) throws IOException
     {
-        if (currentJournal == null || shouldRoll(positionInFile, messageSize))
+        if (currentJournal == null || shouldRoll(dataSize))
         {
             roll();
             positionInFile = 0;
         }
     }
 
-    private boolean shouldRoll(final long position, final long messageSize)
+    private boolean shouldRoll(final long dataSize)
     {
-        return position + messageSize > fileSize;
+        return positionInFile + dataSize > fileSize;
     }
 
     private void roll() throws IOException
     {
         CloseHelper.close(currentJournal);
-        currentJournal = getNextJournal();
-    }
-
-    private T getNextJournal() throws IOException
-    {
-        return journalAllocator.getNextJournal();
+        currentJournal = journalAllocator.getNextJournal();
     }
 }

@@ -17,19 +17,37 @@ public final class SeekThenWriteJournalStrategy extends AbstractJournalStrategy<
     }
 
     @Override
-    public void read(final ByteBuffer data) throws IOException
+    public long size() throws IOException
     {
-
+        return currentJournal.length();
     }
 
     @Override
-    public void write(final ByteBuffer data) throws IOException
+    public int read(final ByteBuffer data) throws IOException
     {
-        positionInFile += data.remaining();
         assignJournal(data.remaining());
 
         currentJournal.seek(positionInFile);
-        currentJournal.write(data.array(), data.position(), data.remaining());
+        int bytesRead = currentJournal.read(data.array(), data.position(), data.remaining());
+
+        positionInFile += bytesRead;
+
+        return bytesRead;
+    }
+
+    @Override
+    public int write(final ByteBuffer data) throws IOException
+    {
+        final int dataSize = data.remaining();
+
+        assignJournal(dataSize);
+
+        currentJournal.seek(positionInFile);
+        currentJournal.write(data.array(), data.position(), dataSize);
+
+        positionInFile += dataSize;
+
+        return dataSize;
     }
 
     @Override

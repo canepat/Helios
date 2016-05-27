@@ -6,9 +6,10 @@ import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.journal.JournalHandler;
+import org.helios.core.journal.JournalWriter;
 import org.helios.core.journal.JournalProcessor;
 import org.helios.core.journal.strategy.JournalStrategy;
+import org.helios.core.journal.util.AllocationMode;
 import org.helios.core.replica.ReplicaHandler;
 import org.helios.core.replica.ReplicaProcessor;
 import org.helios.core.service.*;
@@ -67,14 +68,15 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
         {
             final JournalStrategy journalStrategy = context.journalStrategy();
             final boolean journalFlushingEnabled = context.isJournalFlushingEnabled();
+            final int journalPageSize = context.journalPageSize();
 
             final ByteBuffer journalBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
             journalRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(journalBuffer));
 
-            final JournalHandler journalHandler = new JournalHandler(journalStrategy, journalFlushingEnabled,
-                journalRingBuffer, new BusySpinIdleStrategy());
+            final JournalWriter journalWriter = new JournalWriter(journalStrategy, AllocationMode.ZEROED_ALLOCATION,
+                journalPageSize, journalFlushingEnabled, journalRingBuffer, new BusySpinIdleStrategy());
             journalProcessor = new JournalProcessor(isReplicaEnabled ? replicaRingBuffer : inputRingBuffer,
-                new BusySpinIdleStrategy(), journalHandler);
+                new BusySpinIdleStrategy(), journalWriter);
         }
         else
         {
