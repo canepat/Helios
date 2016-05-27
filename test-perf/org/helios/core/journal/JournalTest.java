@@ -8,8 +8,8 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.core.MessageTypes;
-import org.helios.core.journal.measurement.OutputFormat;
 import org.helios.core.journal.measurement.MeasuredJournalling;
+import org.helios.core.journal.measurement.OutputFormat;
 import org.helios.core.journal.strategy.PositionalJournalling;
 import org.helios.core.journal.util.AllocationMode;
 import org.helios.util.Check;
@@ -26,8 +26,6 @@ public class JournalTest
     private static final int MESSAGE_LENGTH = JournalConfiguration.MESSAGE_LENGTH;
     private static final int NUMBER_OF_ITERATIONS = JournalConfiguration.NUMBER_OF_ITERATIONS;
     private static final int NUMBER_OF_MESSAGES = JournalConfiguration.NUMBER_OF_MESSAGES;
-
-    //private static final Histogram HISTOGRAM = new Histogram(TimeUnit.SECONDS.toNanos(10), 3);
 
     public static void main(String[] args) throws Exception
     {
@@ -61,8 +59,6 @@ public class JournalTest
 
         for (int iteration = 1; iteration <= NUMBER_OF_ITERATIONS; iteration++)
         {
-            //HISTOGRAM.reset();
-
             final long startTime = nanoTime();
 
             c.start();
@@ -74,13 +70,9 @@ public class JournalTest
             final long elapsedTime = (endTime - startTime);
 
             System.out.println(
-                String.format("Journal WRITE: %d iteration, %d ops, %d ns, %d ms, rate %.02g ops/s",
+                String.format("I/O latency during journal WRITE: %d iteration, %d ops, %d ns, %d ms, rate %.02g ops/s",
                     iteration, NUMBER_OF_MESSAGES, elapsedTime, TimeUnit.NANOSECONDS.toMillis(elapsedTime),
                     ((double)NUMBER_OF_MESSAGES / (double)elapsedTime) * 1_000_000_000));
-
-            //System.out.println("Histogram of Journal latencies in microseconds");
-            //HISTOGRAM.outputPercentileDistribution(System.out, 1000.0);
-            //journalling.reset();
         }
 
         journalProcessor.close();
@@ -91,8 +83,6 @@ public class JournalTest
 
         for (int iteration = 1; iteration <= NUMBER_OF_ITERATIONS; iteration++)
         {
-            //HISTOGRAM.reset();
-
             final long startTime = nanoTime();
 
             c.start();
@@ -102,14 +92,14 @@ public class JournalTest
             final long endTime = nanoTime();
             final long elapsedTime = (endTime - startTime);
 
-            System.out.println(
-                String.format("Journal READ: %d iteration, %d ops, %d ns, %d ms, rate %.02g ops/s",
-                    iteration, journalPlayer.messagesReplayed(), elapsedTime, TimeUnit.NANOSECONDS.toMillis(elapsedTime),
-                    ((double)journalPlayer.messagesReplayed() / (double)elapsedTime) * 1_000_000_000));
+            final int messagesReplayed = journalPlayer.messagesReplayed();
 
-            //System.out.println("Histogram of Journal latencies in microseconds");
-            //HISTOGRAM.outputPercentileDistribution(System.out, 1000.0);
-            //journalling.reset();
+            System.out.println(
+                String.format("I/O latency during journal READ: %d iteration, %d ops, %d ns, %d ms, rate %.02g ops/s",
+                    iteration, messagesReplayed, elapsedTime, TimeUnit.NANOSECONDS.toMillis(elapsedTime),
+                    ((double)messagesReplayed / (double)elapsedTime) * 1_000_000_000));
+
+            Check.enforce(messagesReplayed == NUMBER_OF_MESSAGES, "Unexpected messagesReplayed=" + messagesReplayed);
         }
 
         journalPlayer.close();
@@ -145,8 +135,6 @@ public class JournalTest
 
                 buffer.putInt(0, messageNumber);
                 buffer.putLong(4, timestamp);
-
-                //System.out.println(String.format("Producer: messageNumber=%d timestamp=%d", messageNumber, timestamp));
 
                 while (!inputRingBuffer.write(MessageTypes.APPLICATION_MSG_ID, buffer, 0, MESSAGE_LENGTH))
                 {
@@ -207,11 +195,8 @@ public class JournalTest
             final int messageNumber = buffer.getInt(index);
             final long timestamp = buffer.getLong(index + 4);
 
-            //System.out.println(String.format("Consumer: messageNumber=%d startTimestamp=%d", messageNumber, timestamp));
-            Check.enforce(messageNumber == messageCount, String.format("Unexpected messageNumber=%d", messageNumber));
-            Check.enforce(timestamp > 0, String.format("Unexpected timestamp=%d", timestamp));
-
-            //HISTOGRAM.recordValue(nanoTime() - timestamp);
+            Check.enforce(messageNumber == messageCount, "Unexpected messageNumber=" + messageNumber);
+            Check.enforce(timestamp > 0, "Unexpected timestamp=" + timestamp);
         }
     }
 }

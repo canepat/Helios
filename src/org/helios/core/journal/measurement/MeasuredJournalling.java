@@ -12,11 +12,12 @@ import java.util.concurrent.TimeUnit;
 public final class MeasuredJournalling implements Journalling
 {
     private static final long HIGHEST_TRACKABLE_VALUE = TimeUnit.SECONDS.toNanos(1L);
+    private static final int NUM_SIGNIFICANT_VALUE_DIGITS = 4;
 
     private final Journalling delegate;
     private final OutputFormat outputFormat;
-    private final Histogram readHistogram = new Histogram(HIGHEST_TRACKABLE_VALUE, 4);
-    private final Histogram writeHistogram = new Histogram(HIGHEST_TRACKABLE_VALUE, 4);
+    private final Histogram readHistogram = new Histogram(HIGHEST_TRACKABLE_VALUE, NUM_SIGNIFICANT_VALUE_DIGITS);
+    private final Histogram writeHistogram = new Histogram(HIGHEST_TRACKABLE_VALUE, NUM_SIGNIFICANT_VALUE_DIGITS);
     private boolean recording;
 
     public MeasuredJournalling(final Journalling delegate, final OutputFormat outputFormat, final boolean recording)
@@ -94,11 +95,16 @@ public final class MeasuredJournalling implements Journalling
         if (recording)
         {
             final PrintStream printStream = new PrintStream(System.out);
-            printStream.append(String.format("== %s ==%n", "Histogram of journal WRITE latency"));
-            outputFormat.output(writeHistogram, printStream);
-            printStream.append("\n");
-            printStream.append(String.format("== %s ==%n", "Histogram of journal READ latency"));
-            outputFormat.output(readHistogram, printStream);
+            if (writeHistogram.getTotalCount() > 0)
+            {
+                printStream.append(String.format("== %s ==%n", "Histogram of journal WRITE latency in nanoseconds"));
+                outputFormat.output(writeHistogram, printStream);
+            }
+            if (readHistogram.getTotalCount() > 0)
+            {
+                printStream.append(String.format("== %s ==%n", "Histogram of journal READ latency in nanoseconds"));
+                outputFormat.output(readHistogram, printStream);
+            }
         }
 
         readHistogram.reset();

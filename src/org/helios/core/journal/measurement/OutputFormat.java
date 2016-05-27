@@ -33,7 +33,8 @@ public enum OutputFormat
             public void output(final Histogram histogram, final PrintStream printStream)
             {
                 printStream.append(format("%.2f,%d,%d,%d,%d,%d,%d,%d,%d%n",
-                    histogram.getMean(), histogram.getMinValue(),
+                    histogram.getMean(),
+                    histogram.getMinValue(),
                     histogram.getValueAtPercentile(50.0d),
                     histogram.getValueAtPercentile(90.0d),
                     histogram.getValueAtPercentile(99.0d),
