@@ -18,7 +18,7 @@ import static org.helios.core.journal.util.JournalNaming.JOURNAL_FILE_PREFIX;
 
 public final class JournalAllocator<T>
 {
-    private static final int BLOCK_SIZE = 4096;
+    public static final int BLOCK_SIZE = 4096;
 
     private final Path journalDir;
     private final int journalCount;
@@ -50,7 +50,6 @@ public final class JournalAllocator<T>
         }
 
         final ByteBuffer buffer = DirectBufferAllocator.allocateCacheAligned(BLOCK_SIZE);
-        //final ByteBuffer buffer = DirectBufferAllocator.allocate(BLOCK_SIZE);
         buffer.putInt(0xDEADCAFE);
 
         for (int i = 0; i < journalCount; i++)
