@@ -4,13 +4,14 @@ import io.aeron.FragmentAssembler;
 import io.aeron.Subscription;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.AeronStream;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.agrona.UnsafeAccess.UNSAFE;
 
-public abstract class InputMessageProcessor implements Processor
+public class InputMessageProcessor implements Processor
 {
     private static final long SUCCESSFUL_READS_OFFSET;
     private static final long FAILED_READS_OFFSET;
@@ -24,6 +25,12 @@ public abstract class InputMessageProcessor implements Processor
     private final IdleStrategy idleStrategy;
     private final AtomicBoolean running;
     private final Thread processorThread;
+
+    public InputMessageProcessor(final RingBuffer inputRingBuffer, final AeronStream stream, final IdleStrategy idleStrategy,
+        final int frameCountLimit, final String threadName)
+    {
+        this(new InputMessageHandler(inputRingBuffer, idleStrategy), stream, idleStrategy, frameCountLimit, threadName);
+    }
 
     public InputMessageProcessor(final InputMessageHandler handler, final AeronStream stream, final IdleStrategy idleStrategy,
         final int frameCountLimit, final String threadName)

@@ -13,7 +13,10 @@ import org.helios.core.journal.Journalling;
 import org.helios.core.replica.ReplicaHandler;
 import org.helios.core.replica.ReplicaProcessor;
 import org.helios.core.service.*;
+import org.helios.infra.InputMessageProcessor;
+import org.helios.infra.OutputMessageProcessor;
 import org.helios.infra.RateReport;
+import org.helios.infra.RingBufferProcessor;
 import org.helios.util.ProcessorHelper;
 
 import java.nio.ByteBuffer;
@@ -22,11 +25,13 @@ import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENG
 
 public class HeliosService<T extends ServiceHandler> implements Service<T>
 {
-    private final GatewayRequestProcessor gatewayRequestProcessor;
-    private final GatewayResponseProcessor gatewayResponseProcessor;
+    private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.service.poll.frame_count_limit", 10);
+
+    private final InputMessageProcessor gwRequestProcessor;
+    private final OutputMessageProcessor gwResponseProcessor;
     private final JournalProcessor journalProcessor;
     private final ReplicaProcessor replicaProcessor;
-    private final ServiceProcessor<T> serviceProcessor;
+    private final RingBufferProcessor<T> serviceProcessor;
     private final RateReport report;
 
     public HeliosService(final HeliosContext context, final AeronStream reqStream, final AeronStream rspStream,
@@ -41,7 +46,8 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
         final ByteBuffer inputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
 
-        gatewayResponseProcessor = new GatewayResponseProcessor(outputRingBuffer, rspStream);
+        gwResponseProcessor = new OutputMessageProcessor(outputRingBuffer, rspStream, writeIdleStrategy,
+            "gwResponseProcessor");
 
         final boolean isReplicaEnabled = context.isReplicaEnabled();
         final boolean isJournalEnabled = context.isJournalEnabled();
@@ -88,13 +94,14 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
             journalProcessor = null;
         }
 
-        serviceProcessor = new ServiceProcessor<>(
+        serviceProcessor = new RingBufferProcessor<>(
             isJournalEnabled ? journalRingBuffer : (isReplicaEnabled ? replicaRingBuffer : inputRingBuffer),
-            factory.createServiceHandler(outputRingBuffer));
+            factory.createServiceHandler(outputRingBuffer), new BusySpinIdleStrategy(), "serviceProcessor");
 
-        gatewayRequestProcessor = new GatewayRequestProcessor(inputRingBuffer, reqStream, writeIdleStrategy, pollIdleStrategy);
+        gwRequestProcessor = new InputMessageProcessor(inputRingBuffer, reqStream, pollIdleStrategy, FRAME_COUNT_LIMIT,
+            "gwRequestProcessor");
 
-        report = new ServiceReport(gatewayRequestProcessor, gatewayResponseProcessor);
+        report = new ServiceReport(gwRequestProcessor, gwResponseProcessor);
     }
 
     @Override
@@ -115,15 +122,15 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
         ProcessorHelper.start(serviceProcessor);
         ProcessorHelper.start(replicaProcessor);
         ProcessorHelper.start(journalProcessor);
-        ProcessorHelper.start(gatewayResponseProcessor);
-        ProcessorHelper.start(gatewayRequestProcessor);
+        ProcessorHelper.start(gwResponseProcessor);
+        ProcessorHelper.start(gwRequestProcessor);
     }
 
     @Override
     public void close() throws Exception
     {
-        CloseHelper.quietClose(gatewayRequestProcessor);
-        CloseHelper.quietClose(gatewayResponseProcessor);
+        CloseHelper.quietClose(gwRequestProcessor);
+        CloseHelper.quietClose(gwResponseProcessor);
         CloseHelper.quietClose(journalProcessor);
         CloseHelper.quietClose(replicaProcessor);
         CloseHelper.quietClose(serviceProcessor);

@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.agrona.UnsafeAccess.UNSAFE;
 
-public abstract class RingBufferProcessor<T extends MessageHandler & AutoCloseable> implements Processor, MessageHandler
+public class RingBufferProcessor<T extends MessageHandler & AutoCloseable> implements Processor, MessageHandler
 {
     private static final long SUCCESSFUL_READS_OFFSET;
     private static final long FAILED_READS_OFFSET;

@@ -2,19 +2,10 @@ package org.helios.core.journal.util;
 
 import org.agrona.Verify;
 import org.helios.util.Check;
-import org.helios.util.DirectBufferAllocator;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.function.Function;
-
-import static java.nio.file.StandardOpenOption.*;
-import static org.helios.core.journal.util.JournalNaming.JOURNAL_FILE_PREFIX;
 
 public final class JournalAllocator<T>
 {
@@ -23,6 +14,7 @@ public final class JournalAllocator<T>
     private final Path journalDir;
     private final int journalCount;
     private final Function<Path, T> journalFactory;
+    private final FilePreallocator filePreallocator;
     private int nextJournalNumber;
 
     public JournalAllocator(final Path journalDir, final int journalCount, final Function<Path, T> journalFactory)
@@ -35,38 +27,13 @@ public final class JournalAllocator<T>
         this.journalDir = journalDir;
         this.journalCount = journalCount;
         this.journalFactory = journalFactory;
+
+        filePreallocator = new FilePreallocator(journalDir, journalCount);
     }
 
-    public void preallocate(final long fileSize, final AllocationMode allocationMode) throws IOException
+    public void preallocate(final long journalFileSize, final AllocationMode allocationMode) throws IOException
     {
-        Verify.notNull(allocationMode, "allocationMode");
-        Check.enforce(fileSize > 0, "Invalid non positive journal size");
-
-        deleteFiles();
-
-        if (allocationMode == AllocationMode.NO_ALLOCATION)
-        {
-            return;
-        }
-
-        final ByteBuffer buffer = DirectBufferAllocator.allocateCacheAligned(BLOCK_SIZE);
-        buffer.putInt(0xDEADCAFE);
-
-        for (int i = 0; i < journalCount; i++)
-        {
-            try (final FileChannel channel = createFile(i))
-            {
-                if (allocationMode == AllocationMode.ZEROED_ALLOCATION)
-                {
-                    long remaining = fileSize;
-                    while (remaining > 0)
-                    {
-                        buffer.clear();
-                        remaining -= channel.write(buffer);
-                    }
-                }
-            }
-        }
+        filePreallocator.preallocate(journalFileSize, allocationMode);
     }
 
     public int nextJournalNumber()
@@ -81,35 +48,10 @@ public final class JournalAllocator<T>
 
     public T getNextJournal() throws IOException
     {
-        T nextJournal = journalFactory.apply(getFilePath(nextJournalNumber));
+        T nextJournal = journalFactory.apply(JournalNaming.getFilePath(journalDir, nextJournalNumber));
 
         nextJournalNumber = nextJournalNumber + 1 < journalCount ? nextJournalNumber + 1 : 0;
 
         return nextJournal;
-    }
-
-    private FileChannel createFile(final int number) throws IOException
-    {
-        return FileChannel.open(getFilePath(number), CREATE, WRITE, TRUNCATE_EXISTING);
-    }
-
-    private void deleteFiles() throws IOException
-    {
-        Files.find(journalDir, 1, (path, attr) -> path.toFile().getName().startsWith(JOURNAL_FILE_PREFIX))
-            .forEach(path ->  {
-                try
-                {
-                    Files.delete(path);
-                }
-                catch (IOException e)
-                {
-                    throw new UncheckedIOException(e);
-                }
-            });
-    }
-
-    private Path getFilePath(final int number) throws IOException
-    {
-        return Paths.get(journalDir.toString(), JournalNaming.getFileName(number));
     }
 }

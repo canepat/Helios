@@ -1,21 +1,21 @@
 package journal;
 
-import org.helios.core.journal.strategy.PositionalJournalling;
 import org.helios.core.journal.util.AllocationMode;
-import org.helios.core.journal.util.JournalAllocator;
+import org.helios.core.journal.util.FilePreallocator;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.io.IOException;
-import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
 
 public class PreallocateTest
 {
-    private static final JournalAllocator<FileChannel> allocator = new JournalAllocator<>(
-        Paths.get("./runtime"), 1, PositionalJournalling.fileChannelFactory());
+    private static final String JOURNAL_DIR = "./runtime";
+    private static final int JOURNAL_COUNT = 2;
+
+    private static final FilePreallocator allocator = new FilePreallocator(Paths.get(JOURNAL_DIR), JOURNAL_COUNT);
 
     public static void main(String[] args) throws Exception
     {
@@ -31,7 +31,7 @@ public class PreallocateTest
     @Warmup(iterations = 5, time = 5)
     @Measurement(iterations = 10, time = 5)
     @BenchmarkMode(Mode.AverageTime)
-    public static void preallocate()
+    public static void preallocateZeroed1GB()
     {
         try
         {

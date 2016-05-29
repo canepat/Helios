@@ -14,9 +14,11 @@ public class OutputMessageHandler implements MessageHandler, AutoCloseable
 {
     private static final long SUCCESSFUL_WRITES_OFFSET;
     private static final long FAILED_WRITES_OFFSET;
+    private static final long BYTES_WRITTEN_OFFSET;
 
     private volatile long successfulWrites = 0;
     private volatile long failedWrites = 0;
+    private volatile long bytesWritten = 0;
 
     private final Publication outputPublication;
     private final IdleStrategy idleStrategy;
@@ -35,11 +37,13 @@ public class OutputMessageHandler implements MessageHandler, AutoCloseable
         {
             while (outputPublication.offer(buffer, index, length) < 0L)
             {
+                UNSAFE.putOrderedLong(this, FAILED_WRITES_OFFSET, failedWrites + 1);
+
                 idleStrategy.idle(0);
             }
 
             UNSAFE.putOrderedLong(this, SUCCESSFUL_WRITES_OFFSET, successfulWrites + 1);
-            UNSAFE.putOrderedLong(this, FAILED_WRITES_OFFSET, failedWrites + length);
+            UNSAFE.putOrderedLong(this, BYTES_WRITTEN_OFFSET, bytesWritten + length);
         }
         catch (Exception ex)
         {
@@ -63,12 +67,18 @@ public class OutputMessageHandler implements MessageHandler, AutoCloseable
         return failedWrites;
     }
 
+    public long bytesWritten()
+    {
+        return bytesWritten;
+    }
+
     static
     {
         try
         {
             SUCCESSFUL_WRITES_OFFSET = UNSAFE.objectFieldOffset(OutputMessageHandler.class.getDeclaredField("successfulWrites"));
             FAILED_WRITES_OFFSET = UNSAFE.objectFieldOffset(OutputMessageHandler.class.getDeclaredField("failedWrites"));
+            BYTES_WRITTEN_OFFSET = UNSAFE.objectFieldOffset(OutputMessageHandler.class.getDeclaredField("bytesWritten"));
         }
         catch (final Exception ex)
         {

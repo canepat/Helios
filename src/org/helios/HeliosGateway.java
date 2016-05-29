@@ -1,11 +1,16 @@
 package org.helios;
 
 import org.agrona.CloseHelper;
+import org.agrona.concurrent.BusySpinIdleStrategy;
+import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.gateway.*;
+import org.helios.infra.InputMessageProcessor;
+import org.helios.infra.OutputMessageProcessor;
 import org.helios.infra.RateReport;
+import org.helios.infra.RingBufferProcessor;
 import org.helios.util.ProcessorHelper;
 
 import java.nio.ByteBuffer;
@@ -14,25 +19,31 @@ import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENG
 
 public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>
 {
-    private final ServiceResponseProcessor svcResponseProcessor;
-    private final ServiceRequestProcessor svcRequestProcessor;
-    private final GatewayProcessor<T> gatewayProcessor;
+    private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.gateway.poll.frame_count_limit", 10);
+
+    private final InputMessageProcessor svcResponseProcessor;
+    private final OutputMessageProcessor svcRequestProcessor;
+    private final RingBufferProcessor<T> gatewayProcessor;
     private final RateReport report;
 
     public HeliosGateway(final HeliosContext context, final AeronStream reqStream, final AeronStream rspStream,
         final GatewayHandlerFactory<T> factory)
     {
+        final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
+
         final ByteBuffer outputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer outputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(outputBuffer));
 
-        svcRequestProcessor = new ServiceRequestProcessor(outputRingBuffer, reqStream);
+        svcRequestProcessor = new OutputMessageProcessor(outputRingBuffer, reqStream, idleStrategy, "svcRequestProcessor");
 
         final ByteBuffer inputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
 
-        gatewayProcessor = new GatewayProcessor<>(inputRingBuffer, factory.createGatewayHandler(outputRingBuffer));
+        gatewayProcessor = new RingBufferProcessor<>(inputRingBuffer, factory.createGatewayHandler(outputRingBuffer),
+            idleStrategy, "gwProcessor");
 
-        svcResponseProcessor = new ServiceResponseProcessor(inputRingBuffer, rspStream);
+        svcResponseProcessor = new InputMessageProcessor(inputRingBuffer, rspStream, idleStrategy, FRAME_COUNT_LIMIT,
+            "svcResponseProcessor");
 
         report = new GatewayReport(svcRequestProcessor, svcResponseProcessor);
     }
