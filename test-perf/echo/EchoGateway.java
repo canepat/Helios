@@ -1,4 +1,4 @@
-package org.helios.echo;
+package echo;
 
 import org.HdrHistogram.Histogram;
 import org.agrona.LangUtil;
@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 import static java.lang.System.nanoTime;
 
-public class EchoServiceGateway
+public class EchoGateway
 {
     public static final String INPUT_CHANNEL = EchoConfiguration.SERVICE_OUTPUT_CHANNEL;
     public static final int INPUT_STREAM_ID = EchoConfiguration.SERVICE_OUTPUT_STREAM_ID;
@@ -37,29 +37,27 @@ public class EchoServiceGateway
 
         try(final Helios helios = new Helios(context))
         {
-            helios.errorHandler(EchoServiceGateway::serviceError)
-                .availableAssociationHandler(EchoServiceGateway::serviceAssociationEstablished)
-                .unavailableAssociationHandler(EchoServiceGateway::serviceAssociationBroken);
+            helios.errorHandler(EchoGateway::serviceError)
+                .availableAssociationHandler(EchoGateway::serviceAssociationEstablished)
+                .unavailableAssociationHandler(EchoGateway::serviceAssociationBroken);
 
-            System.out.print("done\nCreating Helios I/O gears...");
+            System.out.print("done\nCreating Helios gateway...");
 
             final AeronStream inputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream outputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
             final Gateway<EchoGatewayHandler> gw = helios.addGateway(outputStream, inputStream, new EchoGatewayHandlerFactory());
 
-            System.out.println("done\nEchoServiceGateway is now running.");
-
             helios.start();
 
-            System.out.print("Waiting for association with EchoServiceEngine...");
+            System.out.print("Waiting for association with EchoService...");
 
             ASSOCIATION_LATCH.await();
 
-            System.out.println("done\nEchoServiceGateway is now running.");
+            System.out.println("done\nEchoGateway is now running.");
 
             runTest(gw);
 
-            System.out.println("EchoServiceGateway is now terminated.");
+            System.out.println("EchoGateway is now terminated.");
         }
     }
 

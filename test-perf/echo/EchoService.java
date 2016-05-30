@@ -1,4 +1,4 @@
-package org.helios.echo;
+package echo;
 
 import org.helios.AeronStream;
 import org.helios.Helios;
@@ -7,7 +7,7 @@ import org.helios.util.ShutdownHelper;
 
 import java.util.concurrent.CountDownLatch;
 
-public class EchoServiceEngine
+public class EchoService
 {
     private static final String INPUT_CHANNEL = EchoConfiguration.SERVICE_INPUT_CHANNEL;
     private static final int INPUT_STREAM_ID = EchoConfiguration.SERVICE_INPUT_STREAM_ID;
@@ -32,13 +32,13 @@ public class EchoServiceEngine
             final CountDownLatch runningLatch = new CountDownLatch(1);
             ShutdownHelper.register(runningLatch::countDown);
 
-            System.out.println("done\nEchoServiceEngine is now running.");
+            System.out.println("done\nEchoService is now running.");
 
             helios.start();
 
             runningLatch.await();
         }
 
-        System.out.println("EchoServiceEngine is now terminated.");
+        System.out.println("EchoService is now terminated.");
     }
 }

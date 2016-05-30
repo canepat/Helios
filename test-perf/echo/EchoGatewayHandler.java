@@ -1,4 +1,4 @@
-package org.helios.echo;
+package echo;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.BusySpinIdleStrategy;
@@ -10,7 +10,7 @@ import org.helios.gateway.GatewayHandler;
 import org.helios.util.DirectBufferAllocator;
 
 import static org.agrona.UnsafeAccess.UNSAFE;
-import static org.helios.echo.EchoConfiguration.MESSAGE_LENGTH;
+import static echo.EchoConfiguration.MESSAGE_LENGTH;
 
 public class EchoGatewayHandler implements GatewayHandler
 {

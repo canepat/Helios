@@ -1,4 +1,4 @@
-package org.helios.echo;
+package echo;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.BusySpinIdleStrategy;

@@ -21,7 +21,22 @@ public final class DirectBufferAllocator
 
     public static void free(ByteBuffer buffer)
     {
-        ((sun.nio.ch.DirectBuffer)buffer).cleaner().clean();
+        sun.nio.ch.DirectBuffer directBuffer = (sun.nio.ch.DirectBuffer)buffer;
+        sun.misc.Cleaner cleaner = directBuffer.cleaner();
+
+        while (cleaner == null && directBuffer != null)
+        {
+            directBuffer = (sun.nio.ch.DirectBuffer)directBuffer.attachment();
+            if (directBuffer != null)
+            {
+                cleaner = directBuffer.cleaner();
+            }
+        }
+
+        if (cleaner != null)
+        {
+            cleaner.clean();
+        }
     }
 
     /** TO BE REMOVED on next Agrona build including BufferUtil.allocateAligned **/

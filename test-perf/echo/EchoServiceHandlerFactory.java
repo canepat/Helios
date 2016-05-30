@@ -1,4 +1,4 @@
-package org.helios.echo;
+package echo;
 
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.core.service.ServiceHandlerFactory;

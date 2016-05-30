@@ -1,4 +1,4 @@
-package org.helios.echo;
+package echo;
 
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.helios.Helios;
@@ -8,7 +8,7 @@ import org.helios.gateway.Gateway;
 
 import java.util.concurrent.CountDownLatch;
 
-public class EchoServiceEmbedded
+public class EchoEmbedded
 {
     private static final int SERVICE_INPUT_STREAM_ID = EchoConfiguration.SERVICE_INPUT_STREAM_ID;
     private static final int SERVICE_OUTPUT_STREAM_ID = EchoConfiguration.SERVICE_OUTPUT_STREAM_ID;
@@ -30,9 +30,9 @@ public class EchoServiceEmbedded
 
         try(final Helios helios = new Helios(context, driver))
         {
-            helios.errorHandler(EchoServiceEmbedded::serviceError)
-                .availableAssociationHandler(EchoServiceEmbedded::serviceAssociationEstablished)
-                .unavailableAssociationHandler(EchoServiceEmbedded::serviceAssociationBroken);
+            helios.errorHandler(EchoEmbedded::serviceError)
+                .availableAssociationHandler(EchoEmbedded::serviceAssociationEstablished)
+                .unavailableAssociationHandler(EchoEmbedded::serviceAssociationBroken);
 
             System.out.print("done\nCreating Helios service and gateway...");
 
@@ -40,7 +40,7 @@ public class EchoServiceEmbedded
             final Gateway<EchoGatewayHandler> gw =
                 helios.addEmbeddedGateway(SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID, new EchoGatewayHandlerFactory());
 
-            System.out.println("done\nEchoServiceEmbedded is now running.");
+            System.out.println("done\nEchoEmbedded is now running.");
 
             helios.start();
 
@@ -50,10 +50,10 @@ public class EchoServiceEmbedded
 
             System.out.println("done");
 
-            EchoServiceGateway.runTest(gw);
+            EchoGateway.runTest(gw);
         }
 
-        System.out.println("EchoServiceEmbedded is now terminated.");
+        System.out.println("EchoEmbedded is now terminated.");
         System.exit(0);
     }
 
