@@ -3,7 +3,6 @@ package org.helios.core.snapshot;
 import org.agrona.TimerWheel;
 import org.agrona.Verify;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -35,13 +34,7 @@ public class SnapshotWriter implements Runnable
     public void run()
     {
         // Take the data snapshot.
-        try
-        {
-            snapshot.save();
-        }
-        catch (IOException e)
-        {
-        }
+        snapshot.save();
 
         // Schedule the next data snapshot at current day midnight.
         LocalDateTime now = LocalDateTime.now();

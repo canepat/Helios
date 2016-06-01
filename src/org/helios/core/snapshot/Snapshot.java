@@ -1,10 +1,8 @@
 package org.helios.core.snapshot;
 
-import java.io.IOException;
-
 public interface Snapshot
 {
-    void load() throws IOException;
+    boolean load();
 
-    void save() throws IOException;
+    boolean save();
 }
