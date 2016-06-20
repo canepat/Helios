@@ -151,7 +151,7 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         return new AeronStream(aeron, channel, streamId);
     }
 
-    public <T extends ServiceHandler> Service addEmbeddedService(
+    public <T extends ServiceHandler> Service<T> addEmbeddedService(
         final int reqStreamId, final int rspStreamId, final ServiceHandlerFactory<T> factory)
     {
         final AeronStream reqStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, reqStreamId);
@@ -160,14 +160,14 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         return addService(reqStream, rspStream, factory);
     }
 
-    public <T extends ServiceHandler> Service addService(final AeronStream reqStream, final AeronStream rspStream,
+    public <T extends ServiceHandler> Service<T> addService(final AeronStream reqStream, final AeronStream rspStream,
         final ServiceHandlerFactory<T> factory)
     {
         Verify.notNull(reqStream, "reqStream");
         Verify.notNull(rspStream, "rspStream");
         Verify.notNull(factory, "factory");
 
-        final Service svc = new HeliosService<>(context, reqStream, rspStream, factory);
+        final Service<T> svc = new HeliosService<>(context, reqStream, rspStream, factory);
         serviceList.add(svc);
 
         if (reporter != null)

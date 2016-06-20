@@ -6,6 +6,7 @@ import org.agrona.CloseHelper;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.AeronStream;
+import org.helios.core.snapshot.Snapshot;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -19,6 +20,7 @@ public class InputMessageProcessor implements Processor
     private volatile long successfulReads = 0;
     private volatile long failedReads = 0;
 
+    private final RingBuffer inputRingBuffer;
     private final InputMessageHandler handler;
     private final Subscription inputSubscription;
     private final int frameCountLimit;
@@ -29,13 +31,14 @@ public class InputMessageProcessor implements Processor
     public InputMessageProcessor(final RingBuffer inputRingBuffer, final AeronStream stream, final IdleStrategy idleStrategy,
         final int frameCountLimit, final String threadName)
     {
-        this(new InputMessageHandler(inputRingBuffer, idleStrategy), stream, idleStrategy, frameCountLimit, threadName);
+        this(new InputMessageHandler(inputRingBuffer, idleStrategy), inputRingBuffer, stream, idleStrategy, frameCountLimit, threadName);
     }
 
-    public InputMessageProcessor(final InputMessageHandler handler, final AeronStream stream, final IdleStrategy idleStrategy,
-        final int frameCountLimit, final String threadName)
+    public InputMessageProcessor(final InputMessageHandler handler, final RingBuffer inputRingBuffer, final AeronStream stream,
+        final IdleStrategy idleStrategy, final int frameCountLimit, final String threadName)
     {
         this.handler = handler;
+        this.inputRingBuffer = inputRingBuffer;
         this.idleStrategy = idleStrategy;
         this.frameCountLimit = frameCountLimit;
 
@@ -55,6 +58,10 @@ public class InputMessageProcessor implements Processor
     @Override
     public void run()
     {
+        // First of all, write the Save Data Snapshot message into the input pipeline.
+        Snapshot.writeLoadMessage(inputRingBuffer, idleStrategy);
+
+        // Poll the input subscription for incoming data until running.
         final FragmentAssembler dataHandler = new FragmentAssembler(handler);
 
         while (running.get())

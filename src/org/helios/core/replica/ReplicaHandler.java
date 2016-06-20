@@ -8,7 +8,6 @@ import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.AeronStream;
-import org.helios.core.MessageTypes;
 
 import static org.agrona.UnsafeAccess.UNSAFE;
 
@@ -51,7 +50,7 @@ public class ReplicaHandler implements MessageHandler, AutoCloseable
         }
         finally
         {
-            while (!nextRingBuffer.write(MessageTypes.APPLICATION_MSG_ID, buffer, index, length))
+            while (!nextRingBuffer.write(msgTypeId, buffer, index, length))
             {
                 idleStrategy.idle(0);
             }

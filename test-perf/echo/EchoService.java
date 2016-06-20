@@ -3,6 +3,7 @@ package echo;
 import org.helios.AeronStream;
 import org.helios.Helios;
 import org.helios.HeliosContext;
+import org.helios.core.service.Service;
 import org.helios.util.ShutdownHelper;
 
 import java.util.concurrent.CountDownLatch;
@@ -27,7 +28,9 @@ public class EchoService
 
             final AeronStream inputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream outputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            helios.addService(inputStream, outputStream, new EchoServiceHandlerFactory());
+            final Service<EchoServiceHandler> echoService = helios.addService(inputStream, outputStream,
+                new EchoServiceHandlerFactory());
+            final EchoServiceHandler echoServiceHandler = echoService.handler();
 
             final CountDownLatch runningLatch = new CountDownLatch(1);
             ShutdownHelper.register(runningLatch::countDown);
@@ -37,6 +40,8 @@ public class EchoService
             helios.start();
 
             runningLatch.await();
+
+            System.out.println("EchoService last snapshot: " + echoServiceHandler.lastSnapshotTimestamp());
         }
 
         System.out.println("EchoService is now terminated.");

@@ -1,10 +1,7 @@
-package org.helios.core.journal;
+package org.helios.core.journal.util;
 
 import org.helios.core.journal.strategy.PositionalJournalling;
 import org.helios.core.journal.strategy.SeekJournalling;
-import org.helios.core.journal.util.AllocationMode;
-import org.helios.core.journal.util.FilePreallocatorTest;
-import org.helios.core.journal.util.JournalAllocator;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

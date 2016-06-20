@@ -1,5 +1,6 @@
 apply plugin: 'java'
 apply plugin: 'maven'
+apply plugin: 'signing'
 apply plugin: 'checkstyle'
 apply plugin: 'eclipse'
 apply plugin: 'idea'
@@ -8,6 +9,18 @@ defaultTasks 'clean', 'build', 'install'
 
 group = 'org.helios'
 version = '0.0.2-RC'
+
+ext.isReleaseVersion = !version.endsWith("-RC")
+
+ext {
+    if (!project.hasProperty('ossrhUsername')) {
+        ossrhUsername = ''
+    }
+
+    if (!project.hasProperty('ossrhPassword')) {
+        ossrhPassword = ''
+    }
+}
 
 repositories {
     mavenCentral()
@@ -34,10 +47,9 @@ dependencies {
 
     compile(
         'org.hdrhistogram:HdrHistogram:2.1.8',
-        'uk.co.real-logic:Agrona:0.5',
-        'uk.co.real-logic:aeron-client:0.9.7',
-        'uk.co.real-logic:aeron-driver:0.9.7',
-        'uk.co.real-logic:sbe-tool:1.4.0-RC4',
+        'org.agrona:Agrona:0.5.1',
+        'io.aeron:aeron-client:0.9.8',
+        'uk.co.real-logic:sbe-tool:1.4.1-RC4',
         'com.lmax:disruptor:3.3.4',
         'com.vlkan:flatbuffers:1.2.0-3f79e055')
 
@@ -69,9 +81,67 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
     from javadoc.destinationDir
 }
 
+task copyDependencies(type: Copy) {
+    from configurations.runtime
+    into "${projectDir}/lib"
+}
+
+signing {
+    required { isReleaseVersion && gradle.taskGraph.hasTask("uploadArchives") }
+    sign configurations.archives
+}
+
 artifacts {
     archives sourcesJar
     archives javadocJar
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment {
+                deployment -> signing.signPom(deployment)
+            }
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            pom.project {
+                name = 'Helios'
+                packaging = 'pom'
+                // optionally artifactId can be defined here
+                description = 'Flexible and lightweight component library for domain-specific scalable applications.'
+                url = 'https://github.com/canepat/Helios'
+
+                scm {
+                    connection = 'scm:git:https://github.com/canepat/Helios.git'
+                    developerConnection = 'scm:git:https://github.com/canepat/Helios.git'
+                    url = 'https://github.com/canepat/Helios.git'
+                }
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'canepat'
+                        name = 'Tullio Canepa'
+                        email = 'tullio.canepa@gmail.com'
+                        url = 'https://github.com/canepat'
+                    }
+                }
+            }
+        }
+    }
 }
 
 task wrapper(type: Wrapper) {
