@@ -1,5 +1,6 @@
 package org.helios;
 
+import io.aeron.Subscription;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
@@ -7,17 +8,14 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.gateway.*;
-import org.helios.infra.InputMessageProcessor;
-import org.helios.infra.OutputMessageProcessor;
-import org.helios.infra.RateReport;
-import org.helios.infra.RingBufferProcessor;
+import org.helios.infra.*;
 import org.helios.util.ProcessorHelper;
 
 import java.nio.ByteBuffer;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
-public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>
+public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, AssociationHandler
 {
     private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.gateway.poll.frame_count_limit", 10);
 
@@ -25,6 +23,8 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>
     private final OutputMessageProcessor svcRequestProcessor;
     private final RingBufferProcessor<T> gatewayProcessor;
     private final RateReport report;
+    private AvailableAssociationHandler availableAssociationHandler;
+    private UnavailableAssociationHandler unavailableAssociationHandler;
 
     public HeliosGateway(final HeliosContext context, final AeronStream reqStream, final AeronStream rspStream,
         final GatewayHandlerFactory<T> factory)
@@ -69,10 +69,47 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>
     }
 
     @Override
+    public Gateway<T> availableAssociationHandler(final AvailableAssociationHandler handler)
+    {
+        availableAssociationHandler = handler;
+        return this;
+    }
+
+    @Override
+    public Gateway<T> unavailableAssociationHandler(final UnavailableAssociationHandler handler)
+    {
+        unavailableAssociationHandler = handler;
+        return this;
+    }
+
+    @Override
+    public void onAssociationEstablished()
+    {
+        if (availableAssociationHandler != null)
+        {
+            availableAssociationHandler.onAssociationEstablished();
+        }
+    }
+
+    @Override
+    public void onAssociationBroken()
+    {
+        if (unavailableAssociationHandler != null)
+        {
+            unavailableAssociationHandler.onAssociationBroken();
+        }
+    }
+
+    @Override
     public void close() throws Exception
     {
         CloseHelper.quietClose(svcResponseProcessor);
         CloseHelper.quietClose(svcRequestProcessor);
         CloseHelper.quietClose(gatewayProcessor);
+    }
+
+    long inputSubscriptionId()
+    {
+        return svcResponseProcessor.inputSubscription().registrationId();
     }
 }

@@ -25,9 +25,9 @@ public final class SeekJournalling extends AbstractJournalling<RandomAccessFile>
         };
     }
 
-    public SeekJournalling(final Path journalDir, final long journalSize, final int journalCount)
+    public SeekJournalling(final Path journalDir, final long journalSize, final int pageSize, final int journalCount)
     {
-        super(journalSize, new JournalAllocator<>(journalDir, journalCount, randomAccessFileFactory()));
+        super(journalSize, pageSize, new JournalAllocator<>(journalDir, journalCount, randomAccessFileFactory()));
     }
 
     @Override

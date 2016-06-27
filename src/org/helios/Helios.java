@@ -19,6 +19,7 @@ import io.aeron.*;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
 import org.agrona.Verify;
+import org.agrona.collections.Long2ObjectHashMap;
 import org.helios.core.service.Service;
 import org.helios.core.service.ServiceHandler;
 import org.helios.core.service.ServiceHandlerFactory;
@@ -26,26 +27,19 @@ import org.helios.gateway.Gateway;
 import org.helios.gateway.GatewayHandler;
 import org.helios.gateway.GatewayHandlerFactory;
 import org.helios.infra.RateReporter;
-import org.helios.mmb.AvailableAssociationHandler;
-import org.helios.mmb.UnavailableAssociationHandler;
 import org.helios.util.ProcessorHelper;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Consumer;
 
 public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandler, UnavailableImageHandler
 {
-    public static final String IPC_CHANNEL = CommonContext.IPC_CHANNEL;
-
     private final HeliosContext context;
     private final HeliosDriver driver;
     private final Aeron aeron;
     private Consumer<Throwable> errorHandler;
-    private AvailableAssociationHandler availableAssociationHandler;
-    private UnavailableAssociationHandler unavailableAssociationHandler;
-    private List<Service> serviceList;
-    private List<Gateway<?>> gatewayList;
+    private final Long2ObjectHashMap<HeliosService<?>> serviceRepository;
+    private final Long2ObjectHashMap<HeliosGateway<?>> gatewayRepository;
+
     private RateReporter reporter;
 
     public Helios(final HeliosContext context)
@@ -58,7 +52,8 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         this.context = context;
         this.driver = driver;
 
-        final Aeron.Context aeronContext = new Aeron.Context().errorHandler(this).availableImageHandler(this).unavailableImageHandler(this);
+        final Aeron.Context aeronContext = new Aeron.Context()
+            .errorHandler(this).availableImageHandler(this).unavailableImageHandler(this);
         if (context.isMediaDriverEmbedded())
         {
             aeronContext.aeronDirectoryName(driver.mediaDriver().aeronDirectoryName());
@@ -67,16 +62,16 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
 
         errorHandler = System.err::println;
 
-        serviceList = new ArrayList<>();
-        gatewayList = new ArrayList<>();
+        serviceRepository = new Long2ObjectHashMap<>();
+        gatewayRepository = new Long2ObjectHashMap<>();
 
         reporter = context.isReportingEnabled() ? new RateReporter() : null;
     }
 
     public void start()
     {
-        gatewayList.forEach(Gateway::start);
-        serviceList.forEach(Service::start);
+        gatewayRepository.values().forEach(Gateway::start);
+        serviceRepository.values().forEach(Service::start);
 
         ProcessorHelper.start(reporter);
     }
@@ -86,17 +81,17 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     {
         CloseHelper.quietClose(reporter);
 
-        for (Gateway<?> gw : gatewayList)
+        for (Gateway<?> gw : gatewayRepository.values())
         {
             gw.close();
         }
-        gatewayList.clear();
+        gatewayRepository.clear();
 
-        for (Service svc : serviceList)
+        for (Service svc : serviceRepository.values())
         {
             svc.close();
         }
-        serviceList.clear();
+        serviceRepository.clear();
 
         CloseHelper.quietClose(aeron);
         CloseHelper.quietClose(driver);
@@ -111,36 +106,42 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     @Override
     public void onAvailableImage(final Image image)
     {
-        if (availableAssociationHandler != null)
+        final long subscriptionId = image.subscription().registrationId();
+
+        final HeliosService<?> svc = serviceRepository.get(subscriptionId);
+        if (svc != null)
         {
-            availableAssociationHandler.onAssociationEstablished();
+            svc.onAssociationEstablished();
+        }
+
+        final HeliosGateway<?> gw = gatewayRepository.get(subscriptionId);
+        if (gw != null)
+        {
+            gw.onAssociationEstablished();
         }
     }
 
     @Override
     public void onUnavailableImage(final Image image)
     {
-        if (unavailableAssociationHandler != null)
+        final long subscriptionId = image.subscription().registrationId();
+
+        final HeliosService<?> svc = serviceRepository.get(subscriptionId);
+        if (svc != null)
         {
-            unavailableAssociationHandler.onAssociationBroken();
+            svc.onAssociationBroken();
+        }
+
+        final HeliosGateway<?> gw = gatewayRepository.get(subscriptionId);
+        if (gw != null)
+        {
+            gw.onAssociationBroken();
         }
     }
 
     public Helios errorHandler(Consumer<Throwable> errorHandler)
     {
         this.errorHandler = errorHandler;
-        return this;
-    }
-
-    public Helios availableAssociationHandler(final AvailableAssociationHandler handler)
-    {
-        this.availableAssociationHandler = handler;
-        return this;
-    }
-
-    public Helios unavailableAssociationHandler(final UnavailableAssociationHandler handler)
-    {
-        this.unavailableAssociationHandler = handler;
         return this;
     }
 
@@ -167,8 +168,9 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         Verify.notNull(rspStream, "rspStream");
         Verify.notNull(factory, "factory");
 
-        final Service<T> svc = new HeliosService<>(context, reqStream, rspStream, factory);
-        serviceList.add(svc);
+        final HeliosService<T> svc = new HeliosService<>(context, reqStream, rspStream, factory);
+        final long subscriptionId = svc.inputSubscriptionId();
+        serviceRepository.put(subscriptionId, svc);
 
         if (reporter != null)
         {
@@ -194,8 +196,9 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         Verify.notNull(rspStream, "rspStream");
         Verify.notNull(factory, "factory");
 
-        final Gateway<T> gw = new HeliosGateway<>(context, reqStream, rspStream, factory);
-        gatewayList.add(gw);
+        final HeliosGateway<T> gw = new HeliosGateway<>(context, reqStream, rspStream, factory);
+        final long subscriptionId = gw.inputSubscriptionId();
+        gatewayRepository.put(subscriptionId, gw);
 
         if (reporter != null)
         {

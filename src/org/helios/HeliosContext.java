@@ -11,7 +11,6 @@ public class HeliosContext
     private boolean replicaEnabled;
     private boolean journalEnabled;
     private boolean journalFlushingEnabled;
-    private int journalPageSize;
 
     private String replicaChannel;
     private int replicaStreamId;
@@ -30,7 +29,6 @@ public class HeliosContext
         setReplicaEnabled(HeliosConfiguration.REPLICA_ENABLED);
         setJournalEnabled(HeliosConfiguration.JOURNAL_ENABLED);
         setJournalFlushingEnabled(HeliosConfiguration.JOURNAL_FLUSHING_ENABLED);
-        setJournalPageSize(HeliosConfiguration.JOURNAL_PAGE_SIZE);
 
         setReplicaChannel(HeliosConfiguration.REPLICA_CHANNEL);
         setReplicaStreamId(HeliosConfiguration.REPLICA_STREAM_ID);
@@ -75,12 +73,6 @@ public class HeliosContext
     public HeliosContext setJournalFlushingEnabled(boolean journalFlushingEnabled)
     {
         this.journalFlushingEnabled = journalFlushingEnabled;
-        return this;
-    }
-
-    public HeliosContext setJournalPageSize(int journalPageSize)
-    {
-        this.journalPageSize = journalPageSize;
         return this;
     }
 
@@ -154,11 +146,6 @@ public class HeliosContext
     public boolean isJournalFlushingEnabled()
     {
         return journalFlushingEnabled;
-    }
-
-    public int journalPageSize()
-    {
-        return journalPageSize;
     }
 
     public String replicaChannel()

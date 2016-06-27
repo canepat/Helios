@@ -11,6 +11,8 @@ public interface Journalling extends AutoCloseable
 
     void ensure(final int dataSize) throws IOException;
 
+    int pageSize();
+
     long position();
 
     long size() throws IOException;

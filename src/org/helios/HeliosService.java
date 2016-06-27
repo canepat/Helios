@@ -12,18 +12,18 @@ import org.helios.core.journal.JournalWriter;
 import org.helios.core.journal.Journalling;
 import org.helios.core.replica.ReplicaHandler;
 import org.helios.core.replica.ReplicaProcessor;
-import org.helios.core.service.*;
-import org.helios.infra.InputMessageProcessor;
-import org.helios.infra.OutputMessageProcessor;
-import org.helios.infra.RateReport;
-import org.helios.infra.RingBufferProcessor;
+import org.helios.core.service.Service;
+import org.helios.core.service.ServiceHandler;
+import org.helios.core.service.ServiceHandlerFactory;
+import org.helios.core.service.ServiceReport;
+import org.helios.infra.*;
 import org.helios.util.ProcessorHelper;
 
 import java.nio.ByteBuffer;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
-public class HeliosService<T extends ServiceHandler> implements Service<T>
+public class HeliosService<T extends ServiceHandler> implements Service<T>, AssociationHandler
 {
     private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.service.poll.frame_count_limit", 10);
 
@@ -33,6 +33,8 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
     private final ReplicaProcessor replicaProcessor;
     private final RingBufferProcessor<T> serviceProcessor;
     private final RateReport report;
+    private AvailableAssociationHandler availableAssociationHandler;
+    private UnavailableAssociationHandler unavailableAssociationHandler;
 
     public HeliosService(final HeliosContext context, final AeronStream reqStream, final AeronStream rspStream,
         final ServiceHandlerFactory<T> factory)
@@ -40,10 +42,10 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
         final IdleStrategy writeIdleStrategy = context.writeIdleStrategy();
         final IdleStrategy pollIdleStrategy = context.subscriberIdleStrategy();
 
-        final ByteBuffer outputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+        final ByteBuffer outputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: cache-aligned + configure
         final RingBuffer outputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(outputBuffer));
 
-        final ByteBuffer inputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+        final ByteBuffer inputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: cache-aligned + configure
         final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
 
         gwResponseProcessor = new OutputMessageProcessor(outputRingBuffer, rspStream, writeIdleStrategy,
@@ -59,7 +61,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
 
             final AeronStream replicaStream = new AeronStream(reqStream.aeron, context.replicaChannel(), context.replicaStreamId());
 
-            final ByteBuffer replicaBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+            final ByteBuffer replicaBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: cache-aligned + configure
             replicaRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(replicaBuffer));
 
             final ReplicaHandler replicaHandler = new ReplicaHandler(replicaRingBuffer, idleStrategy, replicaStream);
@@ -76,14 +78,13 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
         {
             final Journalling journalling = context.journalStrategy();
             final boolean flushingEnabled = context.isJournalFlushingEnabled();
-            final int pageSize = context.journalPageSize();
 
             final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
-            final ByteBuffer journalBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+            final ByteBuffer journalBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: cache-aligned + configure
             journalRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(journalBuffer));
 
-            final JournalWriter journalWriter = new JournalWriter(journalling, pageSize, flushingEnabled);
+            final JournalWriter journalWriter = new JournalWriter(journalling, flushingEnabled);
             final JournalHandler journalHandler = new JournalHandler(journalWriter, outputRingBuffer, idleStrategy);
             journalProcessor = new JournalProcessor(isReplicaEnabled ? replicaRingBuffer : inputRingBuffer,
                 idleStrategy, journalHandler);
@@ -127,6 +128,38 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
     }
 
     @Override
+    public Service<T> availableAssociationHandler(final AvailableAssociationHandler handler)
+    {
+        availableAssociationHandler = handler;
+        return this;
+    }
+
+    @Override
+    public Service<T> unavailableAssociationHandler(final UnavailableAssociationHandler handler)
+    {
+        unavailableAssociationHandler = handler;
+        return this;
+    }
+
+    @Override
+    public void onAssociationEstablished()
+    {
+        if (availableAssociationHandler != null)
+        {
+            availableAssociationHandler.onAssociationEstablished();
+        }
+    }
+
+    @Override
+    public void onAssociationBroken()
+    {
+        if (unavailableAssociationHandler != null)
+        {
+            unavailableAssociationHandler.onAssociationBroken();
+        }
+    }
+
+    @Override
     public void close() throws Exception
     {
         CloseHelper.quietClose(gwRequestProcessor);
@@ -134,5 +167,10 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>
         CloseHelper.quietClose(journalProcessor);
         CloseHelper.quietClose(replicaProcessor);
         CloseHelper.quietClose(serviceProcessor);
+    }
+
+    long inputSubscriptionId()
+    {
+        return gwRequestProcessor.inputSubscription().registrationId();
     }
 }

@@ -40,6 +40,12 @@ public final class MeasuredJournalling implements Journalling
     }
 
     @Override
+    public int pageSize()
+    {
+        return delegate.pageSize();
+    }
+
+    @Override
     public long position()
     {
         return delegate.position();

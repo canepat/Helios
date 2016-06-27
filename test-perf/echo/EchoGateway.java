@@ -37,15 +37,16 @@ public class EchoGateway
 
         try(final Helios helios = new Helios(context))
         {
-            helios.errorHandler(EchoGateway::serviceError)
-                .availableAssociationHandler(EchoGateway::serviceAssociationEstablished)
-                .unavailableAssociationHandler(EchoGateway::serviceAssociationBroken);
+            helios.errorHandler(EchoGateway::serviceError);
 
             System.out.print("done\nCreating Helios gateway...");
 
             final AeronStream inputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream outputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            final Gateway<EchoGatewayHandler> gw = helios.addGateway(outputStream, inputStream, new EchoGatewayHandlerFactory());
+            final Gateway<EchoGatewayHandler> gw = helios.addGateway(outputStream, inputStream,
+                new EchoGatewayHandlerFactory());
+            gw.availableAssociationHandler(EchoGateway::serviceAssociationEstablished);
+            gw.unavailableAssociationHandler(EchoGateway::serviceAssociationBroken);
 
             helios.start();
 

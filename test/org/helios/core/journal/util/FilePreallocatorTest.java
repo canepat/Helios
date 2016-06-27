@@ -5,6 +5,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
@@ -15,9 +16,13 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.function.BiConsumer;
 
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
+import static java.nio.file.StandardOpenOption.WRITE;
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class FilePreallocatorTest
 {
@@ -52,6 +57,22 @@ public class FilePreallocatorTest
     {
         preallocator.preallocate(JOURNAL_FILE_SIZE, AllocationMode.NO_ALLOCATION);
         checkAllocationAndRemove(JOURNAL_DIR, JOURNAL_FILE_SIZE, FilePreallocatorTest::checkNoAllocation);
+    }
+
+    @Test
+    public void shouldDeleteFilesBeforePreallocate() throws IOException
+    {
+        final Path journalDirPath = Paths.get(JOURNAL_DIR);
+        for (int i = 0; i < 10 * JOURNAL_COUNT; i++)
+        {
+            final Path journalFilePath = JournalNaming.getFilePath(journalDirPath, i);
+            FileChannel journal = FileChannel.open(journalFilePath, CREATE, WRITE, TRUNCATE_EXISTING);
+            journal.close();
+        }
+
+        preallocator.preallocate(JOURNAL_FILE_SIZE, AllocationMode.SPARSE_ALLOCATION);
+        final int deleted = deleteFiles(JOURNAL_DIR);
+        assertTrue(deleted == JOURNAL_COUNT);
     }
 
     @Test(expected = NullPointerException.class)
@@ -170,18 +191,26 @@ public class FilePreallocatorTest
         assertThat(journalPath.toFile().exists(), is(false));
     }
 
-    public static void deleteFiles(final String journalDir) throws IOException
+    public static int deleteFiles(final String journalDir) throws IOException
     {
-        Files.find(Paths.get(journalDir), 1, (path, attr) -> path.toFile().isFile())
-            .forEach(path ->  {
-                try
+        int numDeleted = 0;
+
+        File journalDirFile = new File(journalDir);
+
+        if (journalDirFile.isDirectory())
+        {
+            final File[] journalFileList = journalDirFile.listFiles();
+            if (journalFileList != null)
+            {
+                for (File journalFile : journalFileList)
                 {
-                    Files.delete(path);
+                    final boolean deleted = journalFile.delete();
+                    assertTrue(deleted);
+                    numDeleted++;
                 }
-                catch (IOException e)
-                {
-                    throw new UncheckedIOException(e);
-                }
-            });
+            }
+        }
+
+        return numDeleted;
     }
 }

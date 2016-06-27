@@ -92,7 +92,7 @@ public class HeliosConfiguration
 
         if (journallingClassName == null)
         {
-            journalling = new PositionalJournalling(journalDir, JOURNAL_FILE_SIZE, JOURNAL_FILE_COUNT);
+            journalling = new PositionalJournalling(journalDir, JOURNAL_FILE_SIZE, JOURNAL_PAGE_SIZE, JOURNAL_FILE_COUNT);
         }
         else
         {

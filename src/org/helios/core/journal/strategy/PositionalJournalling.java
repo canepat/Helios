@@ -26,9 +26,9 @@ public final class PositionalJournalling extends AbstractJournalling<FileChannel
         };
     }
 
-    public PositionalJournalling(final Path journalDir, final long journalSize, final int journalCount)
+    public PositionalJournalling(final Path journalDir, final long journalSize, final int pageSize, final int journalCount)
     {
-        super(journalSize, new JournalAllocator<>(journalDir, journalCount, fileChannelFactory()));
+        super(journalSize, pageSize, new JournalAllocator<>(journalDir, journalCount, fileChannelFactory()));
     }
 
     @Override

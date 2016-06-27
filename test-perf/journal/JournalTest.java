@@ -28,16 +28,23 @@ public class JournalTest
     private static final int NUMBER_OF_ITERATIONS = JournalConfiguration.NUMBER_OF_ITERATIONS;
     private static final int NUMBER_OF_MESSAGES = JournalConfiguration.NUMBER_OF_MESSAGES;
 
+    private static final long MESSAGE_DISK_SIZE = MESSAGE_LENGTH + JournalRecordDescriptor.MESSAGE_FRAME_SIZE;
+
     public static void main(String[] args) throws Exception
     {
         final String journalDir = "./runtime";
-        final long journalFileSize = 1024*1024*1024;
+        final int journalPageSize = 4 * 1024;
+        final long journalFileSize = 256 * 1024 * journalPageSize;
         final int journalFileCount = 1;
         final boolean journalFlushing = false;
-        final int journalPageSize = 4*1024;
+
+        if (journalFileSize * journalFileCount < MESSAGE_DISK_SIZE * NUMBER_OF_MESSAGES)
+        {
+            throw new IllegalArgumentException("Journal too short: modify test hard-coded parameters");
+        }
 
         final Journalling journalling = new MeasuredJournalling(
-            new PositionalJournalling(Paths.get(journalDir), journalFileSize, journalFileCount),
+            new PositionalJournalling(Paths.get(journalDir), journalFileSize, journalPageSize, journalFileCount),
             OutputFormat.LONG,
             true);
 
@@ -49,7 +56,7 @@ public class JournalTest
 
         final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
-        final JournalWriter journalWriter = new JournalWriter(journalling, journalPageSize, journalFlushing);
+        final JournalWriter journalWriter = new JournalWriter(journalling, journalFlushing);
         final JournalHandler journalHandler = new JournalHandler(journalWriter, outputRingBuffer, idleStrategy);
         final JournalProcessor journalProcessor = new JournalProcessor(inputRingBuffer, idleStrategy, journalHandler);
 
@@ -80,7 +87,7 @@ public class JournalTest
 
         System.out.println();
 
-        final JournalReader journalReader = new JournalReader(journalling, journalPageSize);
+        final JournalReader journalReader = new JournalReader(journalling);
         final JournalPlayer journalPlayer = new JournalPlayer(journalReader, outputRingBuffer, idleStrategy);
 
         for (int iteration = 1; iteration <= NUMBER_OF_ITERATIONS; iteration++)
@@ -89,19 +96,20 @@ public class JournalTest
 
             c.start();
             journalPlayer.run();
+
+            final int messagesReplayed = journalPlayer.messagesReplayed();
+            Check.enforce(messagesReplayed == NUMBER_OF_MESSAGES,
+                "Wrong messagesReplayed: expected=" + NUMBER_OF_MESSAGES + " got=" + messagesReplayed);
+
             c.join();
 
             final long endTime = nanoTime();
             final long elapsedTime = (endTime - startTime);
 
-            final int messagesReplayed = journalPlayer.messagesReplayed();
-
             System.out.println(
                 String.format("I/O latency during journal READ: %d iteration, %d ops, %d ns, %d ms, rate %.02g ops/s",
                     iteration, messagesReplayed, elapsedTime, TimeUnit.NANOSECONDS.toMillis(elapsedTime),
-                    ((double)messagesReplayed / (double)elapsedTime) * 1_000_000_000));
-
-            Check.enforce(messagesReplayed == NUMBER_OF_MESSAGES, "Unexpected messagesReplayed=" + messagesReplayed);
+                    ((double) messagesReplayed / (double)elapsedTime) * 1_000_000_000));
         }
 
         journalPlayer.close();

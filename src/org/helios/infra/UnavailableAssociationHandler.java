@@ -1,4 +1,4 @@
-package org.helios.mmb;
+package org.helios.infra;
 
 @FunctionalInterface
 public interface UnavailableAssociationHandler

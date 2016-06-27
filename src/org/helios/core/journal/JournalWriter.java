@@ -3,6 +3,7 @@ package org.helios.core.journal;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
+import org.agrona.Verify;
 import org.agrona.concurrent.MessageHandler;
 import org.helios.core.journal.util.AllocationMode;
 import org.helios.util.DirectBufferAllocator;
@@ -21,14 +22,16 @@ public class JournalWriter implements MessageHandler, AutoCloseable
     private long writeDuration;
     private long bytesWritten;
 
-    public JournalWriter(final Journalling journalling, final int pageSize, final boolean flushing)
+    public JournalWriter(final Journalling journalling, final boolean flushing)
     {
+        Verify.notNull(journalling, "journalling");
+
         this.journalling = journalling;
         this.flushing = flushing;
 
         journalling.open(AllocationMode.ZEROED_ALLOCATION);
 
-        batchingBuffer = DirectBufferAllocator.allocateCacheAligned(pageSize);
+        batchingBuffer = DirectBufferAllocator.allocateCacheAligned(journalling.pageSize());
     }
 
     @Override
@@ -50,20 +53,24 @@ public class JournalWriter implements MessageHandler, AutoCloseable
             batchingBuffer.putInt(msgTypeId);
             batchingBuffer.putInt(length);
 
+            int checkSum = 0;
             for (int i = 0; i < length; i++)
             {
                 if (!batchingBuffer.hasRemaining())
                 {
                     writeBatchingBuffer();
                 }
+                final byte b = buffer.getByte(index + i);
+                batchingBuffer.put(b);
 
-                batchingBuffer.put(buffer.getByte(index + i));
+                checkSum += b;
             }
 
             if (batchingBuffer.remaining() < MESSAGE_TRAILER_SIZE)
             {
                 writeBatchingBuffer();
             }
+            batchingBuffer.putInt(checkSum);
             batchingBuffer.putInt(MESSAGE_TRAIL);
 
             writeDuration += (System.nanoTime() - start);

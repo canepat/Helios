@@ -93,6 +93,11 @@ public class InputMessageProcessor implements Processor
         CloseHelper.quietClose(handler);
     }
 
+    public Subscription inputSubscription()
+    {
+        return inputSubscription;
+    }
+
     public long successfulReads()
     {
         return successfulReads;

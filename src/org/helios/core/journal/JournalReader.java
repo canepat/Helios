@@ -2,6 +2,7 @@ package org.helios.core.journal;
 
 import org.agrona.CloseHelper;
 import org.agrona.MutableDirectBuffer;
+import org.agrona.Verify;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.helios.util.DirectBufferAllocator;
@@ -17,18 +18,22 @@ public class JournalReader implements AutoCloseable
     private final MutableDirectBuffer readBuffer2;
     private MutableDirectBuffer currentReadBuffer;
 
-    public JournalReader(final Journalling journalling, final int pageSize)
+    public JournalReader(final Journalling journalling)
     {
+        Verify.notNull(journalling, "journalling");
+
         this.journalling = journalling;
 
-        readBuffer1 = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(pageSize));
-        readBuffer2 = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(pageSize));
+        readBuffer1 = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(journalling.pageSize()));
+        readBuffer2 = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(journalling.pageSize()));
 
         currentReadBuffer = readBuffer1;
     }
 
     public int readFully(final MessageHandler handler) throws Exception
     {
+        Verify.notNull(handler, "handler");
+
         int messagesRead = 0;
 
         int bytesRead;
@@ -69,8 +74,20 @@ public class JournalReader implements AutoCloseable
                     break;
                 }
 
-                handler.onMessage(msgTypeId, currentReadBuffer, buffer.position(), length);
-                buffer.position(buffer.position() + length);
+                final int messagePosition = buffer.position();
+                handler.onMessage(msgTypeId, currentReadBuffer, messagePosition, length);
+                buffer.position(messagePosition + length);
+
+                int checkSum = 0;
+                for (int i=0; i<length; i++)
+                {
+                    checkSum += currentReadBuffer.getByte(messagePosition + i);
+                }
+                final int msgCheckSum = buffer.getInt();
+                if (checkSum != msgCheckSum)
+                {
+                    throw new IllegalStateException("Invalid checksum: expected=" + checkSum + " got=" + msgCheckSum);
+                }
 
                 final int msgTail = buffer.getInt();
                 if (msgTail != MESSAGE_TRAIL)
