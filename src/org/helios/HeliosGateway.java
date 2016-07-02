@@ -1,14 +1,17 @@
 package org.helios;
 
-import io.aeron.Subscription;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.gateway.*;
+import org.helios.gateway.Gateway;
+import org.helios.gateway.GatewayHandler;
+import org.helios.gateway.GatewayHandlerFactory;
+import org.helios.gateway.GatewayReport;
 import org.helios.infra.*;
+import org.helios.util.DirectBufferAllocator;
 import org.helios.util.ProcessorHelper;
 
 import java.nio.ByteBuffer;
@@ -31,12 +34,12 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
     {
         final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
-        final ByteBuffer outputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+        final ByteBuffer outputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer outputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(outputBuffer));
 
         svcRequestProcessor = new OutputMessageProcessor(outputRingBuffer, reqStream, idleStrategy, "svcRequestProcessor");
 
-        final ByteBuffer inputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+        final ByteBuffer inputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
 
         gatewayProcessor = new RingBufferProcessor<>(inputRingBuffer, factory.createGatewayHandler(outputRingBuffer),

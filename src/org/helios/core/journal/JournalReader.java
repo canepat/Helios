@@ -24,8 +24,9 @@ public class JournalReader implements AutoCloseable
 
         this.journalling = journalling;
 
-        readBuffer1 = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(journalling.pageSize()));
-        readBuffer2 = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(journalling.pageSize()));
+        final int pageSize = journalling.pageSize();
+        readBuffer1 = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(pageSize));
+        readBuffer2 = new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(pageSize));
 
         currentReadBuffer = readBuffer1;
     }

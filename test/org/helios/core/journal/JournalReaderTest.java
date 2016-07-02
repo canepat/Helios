@@ -1,19 +1,16 @@
 package org.helios.core.journal;
 
-import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.helios.core.MessageTypes;
 import org.helios.core.journal.strategy.PositionalJournalling;
-import org.helios.core.journal.util.JournalNaming;
 import org.helios.util.DirectBufferAllocator;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 

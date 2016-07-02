@@ -17,6 +17,7 @@ import org.helios.core.service.ServiceHandler;
 import org.helios.core.service.ServiceHandlerFactory;
 import org.helios.core.service.ServiceReport;
 import org.helios.infra.*;
+import org.helios.util.DirectBufferAllocator;
 import org.helios.util.ProcessorHelper;
 
 import java.nio.ByteBuffer;
@@ -42,10 +43,10 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
         final IdleStrategy writeIdleStrategy = context.writeIdleStrategy();
         final IdleStrategy pollIdleStrategy = context.subscriberIdleStrategy();
 
-        final ByteBuffer outputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: cache-aligned + configure
+        final ByteBuffer outputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer outputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(outputBuffer));
 
-        final ByteBuffer inputBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: cache-aligned + configure
+        final ByteBuffer inputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
 
         gwResponseProcessor = new OutputMessageProcessor(outputRingBuffer, rspStream, writeIdleStrategy,
@@ -61,7 +62,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
 
             final AeronStream replicaStream = new AeronStream(reqStream.aeron, context.replicaChannel(), context.replicaStreamId());
 
-            final ByteBuffer replicaBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: cache-aligned + configure
+            final ByteBuffer replicaBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
             replicaRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(replicaBuffer));
 
             final ReplicaHandler replicaHandler = new ReplicaHandler(replicaRingBuffer, idleStrategy, replicaStream);
@@ -81,7 +82,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
 
             final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
-            final ByteBuffer journalBuffer = ByteBuffer.allocateDirect((16 * 1024) + TRAILER_LENGTH); // TODO: cache-aligned + configure
+            final ByteBuffer journalBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
             journalRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(journalBuffer));
 
             final JournalWriter journalWriter = new JournalWriter(journalling, flushingEnabled);

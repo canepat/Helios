@@ -2,7 +2,6 @@ package org.helios.util;
 
 import org.agrona.BitUtil;
 import org.junit.Test;
-import sun.nio.ch.DirectBuffer;
 
 import java.nio.ByteBuffer;
 
@@ -31,7 +30,7 @@ public class DirectBufferAllocatorTest
         assertTrue(buffer.isDirect());
         assertThat(buffer.capacity(), is(CAPACITY));
 
-        final long address = ((DirectBuffer)buffer).address();
+        final long address = ((sun.nio.ch.DirectBuffer)buffer).address();
         assertTrue(BitUtil.isAligned(address, BitUtil.CACHE_LINE_LENGTH));
     }
 

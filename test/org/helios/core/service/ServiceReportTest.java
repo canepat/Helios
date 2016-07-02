@@ -4,7 +4,6 @@ import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.AeronStream;
 import org.helios.Helios;
 import org.helios.HeliosContext;
 import org.helios.HeliosDriver;
