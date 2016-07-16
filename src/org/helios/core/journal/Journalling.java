@@ -7,9 +7,9 @@ import java.nio.ByteBuffer;
 
 public interface Journalling extends AutoCloseable
 {
-    void open(final AllocationMode allocationMode);
+    Journalling open(final AllocationMode allocationMode);
 
-    void ensure(final int dataSize) throws IOException;
+    Journalling ensure(final int dataSize) throws IOException;
 
     int pageSize();
 
@@ -23,5 +23,7 @@ public interface Journalling extends AutoCloseable
 
     int write(final ByteBuffer data) throws IOException;
 
-    void flush() throws IOException;
+    Journalling flush() throws IOException;
+
+    Journalling depletionHandler(final JournalDepletionHandler handler);
 }

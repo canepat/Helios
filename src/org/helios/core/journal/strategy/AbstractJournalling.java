@@ -1,5 +1,7 @@
 package org.helios.core.journal.strategy;
 
+import org.agrona.BitUtil;
+import org.helios.core.journal.JournalDepletionHandler;
 import org.helios.core.journal.Journalling;
 import org.helios.core.journal.util.AllocationMode;
 import org.helios.core.journal.util.JournalAllocator;
@@ -14,12 +16,15 @@ public abstract class AbstractJournalling<T extends Closeable> implements Journa
 {
     private final long fileSize;
     private final int pageSize;
-    protected final JournalAllocator<T> journalAllocator;
+    private final JournalAllocator<T> journalAllocator;
+    private JournalDepletionHandler handler;
     protected T currentJournal;
     protected long positionInFile;
 
     protected AbstractJournalling(final long fileSize, final int pageSize, final JournalAllocator<T> journalAllocator)
     {
+        Check.enforce(fileSize > 0, "Journal file size must be positive");
+        Check.enforce(BitUtil.isPowerOfTwo(pageSize), "Journal page size must be power of 2");
         Check.enforce(fileSize % pageSize == 0, "Journal file size must be multiple of journal page size");
 
         this.fileSize = fileSize;
@@ -28,22 +33,27 @@ public abstract class AbstractJournalling<T extends Closeable> implements Journa
     }
 
     @Override
-    public void open(final AllocationMode allocationMode)
+    public Journalling open(final AllocationMode allocationMode)
     {
         try
         {
             journalAllocator.preallocate(fileSize, allocationMode);
+
+            assignJournal(0);
         }
         catch (IOException ioe)
         {
             LangUtil.rethrowUnchecked(ioe);
         }
+
+        return this;
     }
 
     @Override
-    public void ensure(int dataSize) throws IOException
+    public Journalling ensure(int dataSize) throws IOException
     {
         assignJournal(dataSize);
+        return this;
     }
 
     @Override
@@ -70,8 +80,16 @@ public abstract class AbstractJournalling<T extends Closeable> implements Journa
         positionInFile = 0;
         journalAllocator.reset();
 
-        currentJournal.close();
+        CloseHelper.close(currentJournal);
         currentJournal = null;
+    }
+
+    @Override
+    public Journalling depletionHandler(final JournalDepletionHandler handler)
+    {
+        this.handler = handler;
+
+        return this;
     }
 
     protected void assignJournal(final int dataSize) throws IOException
@@ -91,6 +109,17 @@ public abstract class AbstractJournalling<T extends Closeable> implements Journa
     private void roll() throws IOException
     {
         CloseHelper.close(currentJournal);
+
+        if (lastJournalReached() && handler != null)
+        {
+            handler.onJournalDepletion(this);
+        }
+
         currentJournal = journalAllocator.getNextJournal();
+    }
+
+    private boolean lastJournalReached()
+    {
+        return journalAllocator.nextJournalNumber() == 0;
     }
 }

@@ -1,5 +1,6 @@
 package org.helios.core.journal.strategy;
 
+import org.helios.core.journal.Journalling;
 import org.helios.core.journal.util.JournalAllocator;
 
 import java.io.IOException;
@@ -62,8 +63,9 @@ public final class PositionalJournalling extends AbstractJournalling<FileChannel
     }
 
     @Override
-    public void flush() throws IOException
+    public Journalling flush() throws IOException
     {
         currentJournal.force(true);
+        return this;
     }
 }

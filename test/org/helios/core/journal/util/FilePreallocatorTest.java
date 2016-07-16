@@ -195,7 +195,7 @@ public class FilePreallocatorTest
     {
         int numDeleted = 0;
 
-        File journalDirFile = new File(journalDir);
+        final File journalDirFile = new File(journalDir);
 
         if (journalDirFile.isDirectory())
         {

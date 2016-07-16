@@ -1,6 +1,7 @@
 package org.helios.core.journal.measurement;
 
 import org.HdrHistogram.Histogram;
+import org.helios.core.journal.JournalDepletionHandler;
 import org.helios.core.journal.Journalling;
 import org.helios.core.journal.util.AllocationMode;
 
@@ -28,15 +29,15 @@ public final class MeasuredJournalling implements Journalling
     }
 
     @Override
-    public void open(AllocationMode allocationMode)
+    public Journalling open(AllocationMode allocationMode)
     {
-        delegate.open(allocationMode);
+        return delegate.open(allocationMode);
     }
 
     @Override
-    public void ensure(int dataSize) throws IOException
+    public Journalling ensure(int dataSize) throws IOException
     {
-        delegate.ensure(dataSize);
+        return delegate.ensure(dataSize);
     }
 
     @Override
@@ -88,9 +89,15 @@ public final class MeasuredJournalling implements Journalling
     }
 
     @Override
-    public void flush() throws IOException
+    public Journalling flush() throws IOException
     {
-        delegate.flush();
+        return delegate.flush();
+    }
+
+    @Override
+    public Journalling depletionHandler(final JournalDepletionHandler handler)
+    {
+        return delegate.depletionHandler(handler);
     }
 
     @Override

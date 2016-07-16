@@ -3,6 +3,8 @@ package org.helios.util;
 import org.agrona.TimerWheel;
 import org.agrona.concurrent.IdleStrategy;
 
+import java.util.Objects;
+
 public class TimerWheelWaitStrategy implements IdleStrategy
 {
     private final TimerWheel timerWheel;
@@ -10,8 +12,8 @@ public class TimerWheelWaitStrategy implements IdleStrategy
 
     public TimerWheelWaitStrategy(final TimerWheel timerWheel, final IdleStrategy delegate)
     {
-        this.timerWheel = timerWheel;
-        this.delegate = delegate;
+        this.timerWheel = Objects.requireNonNull(timerWheel);
+        this.delegate = Objects.requireNonNull(delegate);
     }
 
     @Override

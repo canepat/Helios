@@ -43,7 +43,7 @@ public class JournalWriterTest
     @Test
     public void shouldReturnExpectedWritingMultipleMessageJournal() throws Exception
     {
-        try(final JournalWriter writer = new JournalWriter(journalling, true))
+        try (final JournalWriter writer = new JournalWriter(journalling, true))
         {
             for (int i = 0; i < MESSAGE_COUNT; i++)
             {

@@ -1,5 +1,6 @@
 package org.helios.core.journal.strategy;
 
+import org.helios.core.journal.Journalling;
 import org.helios.core.journal.util.JournalAllocator;
 
 import java.io.FileNotFoundException;
@@ -39,10 +40,18 @@ public final class SeekJournalling extends AbstractJournalling<RandomAccessFile>
     @Override
     public int read(final ByteBuffer data) throws IOException
     {
-        assignJournal(data.remaining());
+        final int dataSize = data.remaining();
+
+        assignJournal(dataSize);
 
         currentJournal.seek(positionInFile);
-        int bytesRead = currentJournal.read(data.array(), data.position(), data.remaining());
+
+        int bytesRead = 0;
+        for (int i = data.position(); i < dataSize; i++)
+        {
+            data.put((byte)currentJournal.read());
+            bytesRead++;
+        }
 
         positionInFile += bytesRead;
 
@@ -57,7 +66,10 @@ public final class SeekJournalling extends AbstractJournalling<RandomAccessFile>
         assignJournal(dataSize);
 
         currentJournal.seek(positionInFile);
-        currentJournal.write(data.array(), data.position(), dataSize);
+        for (int i = data.position(); i < dataSize; i++)
+        {
+            currentJournal.write(data.get(i));
+        }
 
         positionInFile += dataSize;
 
@@ -65,8 +77,9 @@ public final class SeekJournalling extends AbstractJournalling<RandomAccessFile>
     }
 
     @Override
-    public void flush() throws IOException
+    public Journalling flush() throws IOException
     {
         currentJournal.getChannel().force(true);
+        return this;
     }
 }
