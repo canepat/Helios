@@ -107,6 +107,12 @@ public class JournalWriter implements MessageHandler, AutoCloseable
             ((double) bytesWritten / (double) writeDuration) * 1_000_000_000);
     }
 
+    JournalWriter depletionHandler(final JournalDepletionHandler handler)
+    {
+        journalling.depletionHandler(handler);
+        return this;
+    }
+
     private int writeBatchingBuffer() throws IOException
     {
         batchingBuffer.flip();

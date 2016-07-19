@@ -88,7 +88,6 @@ public abstract class AbstractJournalling<T extends Closeable> implements Journa
     public Journalling depletionHandler(final JournalDepletionHandler handler)
     {
         this.handler = handler;
-
         return this;
     }
 
@@ -120,6 +119,6 @@ public abstract class AbstractJournalling<T extends Closeable> implements Journa
 
     private boolean lastJournalReached()
     {
-        return journalAllocator.nextJournalNumber() == 0;
+        return currentJournal != null && journalAllocator.nextJournalNumber() == 0;
     }
 }

@@ -5,8 +5,11 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.helios.core.snapshot.Snapshot;
 
-public class JournalHandler implements MessageHandler, AutoCloseable
+import java.util.Objects;
+
+public class JournalHandler implements MessageHandler, JournalDepletionHandler, AutoCloseable
 {
     private final JournalWriter writer;
     private final RingBuffer nextRingBuffer;
@@ -14,9 +17,9 @@ public class JournalHandler implements MessageHandler, AutoCloseable
 
     public JournalHandler(final JournalWriter writer, final RingBuffer nextRingBuffer, final IdleStrategy idleStrategy)
     {
-        this.writer = writer;
-        this.nextRingBuffer = nextRingBuffer;
-        this.idleStrategy = idleStrategy;
+        this.writer = writer.depletionHandler(this);
+        this.nextRingBuffer = Objects.requireNonNull(nextRingBuffer);
+        this.idleStrategy = Objects.requireNonNull(idleStrategy);
     }
 
     @Override
@@ -33,6 +36,12 @@ public class JournalHandler implements MessageHandler, AutoCloseable
                 idleStrategy.idle(0);
             }
         }
+    }
+
+    @Override
+    public void onJournalDepletion(Journalling journalling)
+    {
+        Snapshot.writeSaveMessage(nextRingBuffer, idleStrategy);
     }
 
     @Override

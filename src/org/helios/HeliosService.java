@@ -86,7 +86,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
             journalRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(journalBuffer));
 
             final JournalWriter journalWriter = new JournalWriter(journalling, flushingEnabled);
-            final JournalHandler journalHandler = new JournalHandler(journalWriter, outputRingBuffer, idleStrategy);
+            final JournalHandler journalHandler = new JournalHandler(journalWriter, journalRingBuffer, idleStrategy);
             journalProcessor = new JournalProcessor(isReplicaEnabled ? replicaRingBuffer : inputRingBuffer,
                 idleStrategy, journalHandler);
         }
