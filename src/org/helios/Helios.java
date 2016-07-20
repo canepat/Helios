@@ -29,6 +29,7 @@ import org.helios.gateway.GatewayHandlerFactory;
 import org.helios.infra.RateReporter;
 import org.helios.util.ProcessorHelper;
 
+import java.util.Objects;
 import java.util.function.Consumer;
 
 public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandler, UnavailableImageHandler
@@ -141,14 +142,12 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
 
     public Helios errorHandler(Consumer<Throwable> errorHandler)
     {
-        this.errorHandler = errorHandler;
+        this.errorHandler = Objects.requireNonNull(errorHandler);
         return this;
     }
 
     public AeronStream newStream(final String channel, final int streamId)
     {
-        Verify.notNull(channel, "channel");
-
         return new AeronStream(aeron, channel, streamId);
     }
 
@@ -164,9 +163,9 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     public <T extends ServiceHandler> Service<T> addService(final AeronStream reqStream, final AeronStream rspStream,
         final ServiceHandlerFactory<T> factory)
     {
-        Verify.notNull(reqStream, "reqStream");
-        Verify.notNull(rspStream, "rspStream");
-        Verify.notNull(factory, "factory");
+        Objects.requireNonNull(reqStream, "reqStream");
+        Objects.requireNonNull(rspStream, "rspStream");
+        Objects.requireNonNull(factory, "factory");
 
         final HeliosService<T> svc = new HeliosService<>(context, reqStream, rspStream, factory);
         final long subscriptionId = svc.inputSubscriptionId();
