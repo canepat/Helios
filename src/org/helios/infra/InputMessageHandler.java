@@ -5,7 +5,6 @@ import io.aeron.logbuffer.Header;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.MessageTypes;
 
 public class InputMessageHandler implements FragmentHandler, AutoCloseable
 {

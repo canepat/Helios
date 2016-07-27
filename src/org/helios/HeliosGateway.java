@@ -104,7 +104,7 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
     }
 
     @Override
-    public void close() throws Exception
+    public void close()
     {
         CloseHelper.quietClose(svcResponseProcessor);
         CloseHelper.quietClose(svcRequestProcessor);

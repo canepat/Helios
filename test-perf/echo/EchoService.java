@@ -3,7 +3,7 @@ package echo;
 import org.helios.AeronStream;
 import org.helios.Helios;
 import org.helios.HeliosContext;
-import org.helios.core.service.Service;
+import org.helios.service.Service;
 import org.helios.util.ShutdownHelper;
 
 import java.util.concurrent.CountDownLatch;

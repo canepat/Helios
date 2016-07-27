@@ -1,7 +1,7 @@
 package echo;
 
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.service.ServiceHandlerFactory;
+import org.helios.service.ServiceHandlerFactory;
 
 class EchoServiceHandlerFactory implements ServiceHandlerFactory<EchoServiceHandler>
 {

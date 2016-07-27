@@ -1,7 +1,7 @@
 package journal;
 
-import org.helios.core.journal.util.AllocationMode;
-import org.helios.core.journal.util.FilePreallocator;
+import org.helios.journal.util.AllocationMode;
+import org.helios.journal.util.FilePreallocator;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;

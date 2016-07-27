@@ -6,16 +6,16 @@ import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.journal.JournalHandler;
-import org.helios.core.journal.JournalProcessor;
-import org.helios.core.journal.JournalWriter;
-import org.helios.core.journal.Journalling;
-import org.helios.core.replica.ReplicaHandler;
-import org.helios.core.replica.ReplicaProcessor;
-import org.helios.core.service.Service;
-import org.helios.core.service.ServiceHandler;
-import org.helios.core.service.ServiceHandlerFactory;
-import org.helios.core.service.ServiceReport;
+import org.helios.journal.JournalHandler;
+import org.helios.journal.JournalProcessor;
+import org.helios.journal.JournalWriter;
+import org.helios.journal.Journalling;
+import org.helios.replica.ReplicaHandler;
+import org.helios.replica.ReplicaProcessor;
+import org.helios.service.Service;
+import org.helios.service.ServiceHandler;
+import org.helios.service.ServiceHandlerFactory;
+import org.helios.service.ServiceReport;
 import org.helios.infra.*;
 import org.helios.util.DirectBufferAllocator;
 import org.helios.util.ProcessorHelper;
@@ -161,7 +161,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
     }
 
     @Override
-    public void close() throws Exception
+    public void close()
     {
         CloseHelper.quietClose(gwRequestProcessor);
         CloseHelper.quietClose(gwResponseProcessor);

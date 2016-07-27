@@ -4,7 +4,6 @@ import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.helios.Helios;
 import org.helios.HeliosContext;
 import org.helios.HeliosDriver;
-import org.helios.core.service.Service;
 import org.helios.gateway.Gateway;
 
 import java.util.concurrent.CountDownLatch;

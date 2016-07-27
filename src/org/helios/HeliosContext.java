@@ -1,7 +1,7 @@
 package org.helios;
 
 import org.agrona.concurrent.IdleStrategy;
-import org.helios.core.journal.Journalling;
+import org.helios.journal.Journalling;
 
 public class HeliosContext
 {
@@ -23,7 +23,7 @@ public class HeliosContext
 
     public HeliosContext()
     {
-        setMediaDriverConf(HeliosConfiguration.MEDIA_DRIVER_CONF_DIR);
+        setMediaDriverConf(HeliosConfiguration.MEDIA_DRIVER_CONF);
         setMediaDriverEmbedded(HeliosConfiguration.MEDIA_DRIVER_EMBEDDED);
         setReportingEnabled(HeliosConfiguration.REPORTING_ENABLED);
         setReplicaEnabled(HeliosConfiguration.REPLICA_ENABLED);

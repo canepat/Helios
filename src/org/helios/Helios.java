@@ -20,9 +20,9 @@ import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
 import org.agrona.Verify;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.helios.core.service.Service;
-import org.helios.core.service.ServiceHandler;
-import org.helios.core.service.ServiceHandlerFactory;
+import org.helios.service.Service;
+import org.helios.service.ServiceHandler;
+import org.helios.service.ServiceHandlerFactory;
 import org.helios.gateway.Gateway;
 import org.helios.gateway.GatewayHandler;
 import org.helios.gateway.GatewayHandlerFactory;
@@ -42,6 +42,11 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     private final Long2ObjectHashMap<HeliosGateway<?>> gatewayRepository;
 
     private RateReporter reporter;
+
+    public Helios()
+    {
+        this(new HeliosContext());
+    }
 
     public Helios(final HeliosContext context)
     {
@@ -78,20 +83,14 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     }
 
     @Override
-    public void close() throws Exception
+    public void close()
     {
         CloseHelper.quietClose(reporter);
 
-        for (Gateway<?> gw : gatewayRepository.values())
-        {
-            gw.close();
-        }
+        gatewayRepository.values().forEach(CloseHelper::quietClose);
         gatewayRepository.clear();
 
-        for (Service svc : serviceRepository.values())
-        {
-            svc.close();
-        }
+        serviceRepository.values().forEach(CloseHelper::quietClose);
         serviceRepository.clear();
 
         CloseHelper.quietClose(aeron);

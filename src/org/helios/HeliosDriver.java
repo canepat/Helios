@@ -7,16 +7,18 @@ import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.NoOpIdleStrategy;
 
 import java.io.Closeable;
-import java.io.IOException;
 
 public class HeliosDriver implements Closeable
 {
+    private final static String AERON_DIR_NAME_DEFAULT = "./.aeron";
+
     private final MediaDriver mediaDriver;
 
     public HeliosDriver(final HeliosContext context)
     {
         this(context, new MediaDriver.Context()
-            .threadingMode(ThreadingMode.DEDICATED)
+            .aeronDirectoryName(AERON_DIR_NAME_DEFAULT)
+            .threadingMode(ThreadingMode.SHARED)
             .conductorIdleStrategy(new BackoffIdleStrategy(1, 1, 1, 1))
             .receiverIdleStrategy(new NoOpIdleStrategy())
             .senderIdleStrategy(new NoOpIdleStrategy()));
@@ -24,20 +26,24 @@ public class HeliosDriver implements Closeable
 
     public HeliosDriver(final HeliosContext context, final MediaDriver.Context driverContext)
     {
-        driverContext.dirsDeleteOnStart(true);
-
         String mediaDriverConf = context.getMediaDriverConf();
         if (mediaDriverConf != null)
         {
             MediaDriver.loadPropertiesFile(mediaDriverConf);
         }
+        else
+        {
+            driverContext.dirsDeleteOnStart(true);
+        }
+
+        driverContext.warnIfDirectoriesExist(false);
 
         final boolean embeddedMediaDriver = context.isMediaDriverEmbedded();
         mediaDriver = embeddedMediaDriver ? MediaDriver.launchEmbedded(driverContext) : null;
     }
 
     @Override
-    public void close() throws IOException
+    public void close()
     {
         CloseHelper.quietClose(mediaDriver);
     }

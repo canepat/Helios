@@ -5,12 +5,12 @@ import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.MessageTypes;
+import org.helios.infra.MessageTypes;
 import org.helios.gateway.GatewayHandler;
 import org.helios.util.DirectBufferAllocator;
 
-import static org.agrona.UnsafeAccess.UNSAFE;
 import static echo.EchoConfiguration.MESSAGE_LENGTH;
+import static org.agrona.UnsafeAccess.UNSAFE;
 
 public class EchoGatewayHandler implements GatewayHandler
 {

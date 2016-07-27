@@ -6,7 +6,7 @@ import org.agrona.CloseHelper;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.AeronStream;
-import org.helios.core.snapshot.Snapshot;
+import org.helios.snapshot.Snapshot;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 

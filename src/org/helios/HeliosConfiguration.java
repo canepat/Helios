@@ -2,8 +2,8 @@ package org.helios;
 
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.YieldingWaitStrategy;
-import org.helios.core.journal.Journalling;
-import org.helios.core.journal.strategy.PositionalJournalling;
+import org.helios.journal.Journalling;
+import org.helios.journal.strategy.PositionalJournalling;
 import org.agrona.LangUtil;
 import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
@@ -32,7 +32,7 @@ public class HeliosConfiguration
     public static final String REPLICA_CHANNEL = getProperty("helios.core.replica_channel", "udp://localhost:40125");
     public static final int REPLICA_STREAM_ID = getInteger("helios.core.replica_stream_id", 10);
 
-    public static final String MEDIA_DRIVER_CONF_DIR = getProperty("helios.core.media_driver.conf.dir");
+    public static final String MEDIA_DRIVER_CONF = getProperty("helios.core.media_driver.conf");
     public static final boolean MEDIA_DRIVER_EMBEDDED = !getBoolean("helios.core.media_driver.external");
 
     public static final String READ_IDLE_STRATEGY = getProperty("helios.core.ring_buffer_read.idle.strategy");

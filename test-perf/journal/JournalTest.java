@@ -7,11 +7,11 @@ import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.core.MessageTypes;
-import org.helios.core.journal.*;
-import org.helios.core.journal.measurement.MeasuredJournalling;
-import org.helios.core.journal.measurement.OutputFormat;
-import org.helios.core.journal.strategy.PositionalJournalling;
+import org.helios.infra.MessageTypes;
+import org.helios.journal.*;
+import org.helios.journal.measurement.MeasuredJournalling;
+import org.helios.journal.measurement.OutputFormat;
+import org.helios.journal.strategy.PositionalJournalling;
 import org.helios.util.Check;
 import org.helios.util.DirectBufferAllocator;
 

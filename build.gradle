@@ -46,12 +46,12 @@ dependencies {
     checkstyle "com.github.sevntu.checkstyle:sevntu-checks:1.17.1"
 
     compile(
-        'org.hdrhistogram:HdrHistogram:2.1.8',
-        'org.agrona:Agrona:0.5.2',
-        'io.aeron:aeron-client:0.9.9',
-        'io.aeron:aeron-driver:0.9.9',
-        'uk.co.real-logic:sbe-tool:1.4.2-RC4',
-        'com.lmax:disruptor:3.3.4',
+        'org.hdrhistogram:HdrHistogram:2.1.9',
+        'org.agrona:Agrona:0.5.3',
+        'io.aeron:aeron-client:1.0',
+        'io.aeron:aeron-driver:1.0',
+        'uk.co.real-logic:sbe-tool:1.5.0',
+        'com.lmax:disruptor:3.3.5',
         'com.vlkan:flatbuffers:1.2.0-3f79e055')
 
     testCompile(
