@@ -38,7 +38,7 @@ public final class RateReporter implements Processor
         {
             LockSupport.parkNanos(1_000_000_000L); // TODO: configure
 
-            reportList.forEach(report -> report.print(System.out)); // TODO: publish via Aeron, log
+            reportList.forEach(report -> report.print(System.out)); // TODO: write to SHM, publish via Aeron, log
         }
     }
 

@@ -2,12 +2,12 @@ package org.helios.journal;
 
 import org.agrona.CloseHelper;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.Verify;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.helios.util.DirectBufferAllocator;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 import static org.helios.journal.JournalRecordDescriptor.*;
 
@@ -20,7 +20,7 @@ public class JournalReader implements AutoCloseable
 
     public JournalReader(final Journalling journalling)
     {
-        Verify.notNull(journalling, "journalling");
+        Objects.requireNonNull(journalling, "journalling");
 
         this.journalling = journalling;
 
@@ -33,7 +33,7 @@ public class JournalReader implements AutoCloseable
 
     public int readFully(final MessageHandler handler) throws Exception
     {
-        Verify.notNull(handler, "handler");
+        Objects.requireNonNull(handler, "handler");
 
         int messagesRead = 0;
 

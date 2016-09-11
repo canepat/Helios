@@ -5,8 +5,6 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.Helios;
-import org.helios.HeliosContext;
-import org.helios.HeliosDriver;
 import org.helios.infra.InputMessageProcessor;
 import org.helios.infra.OutputMessageProcessor;
 import org.helios.util.DirectBufferAllocator;
@@ -21,23 +19,25 @@ public class ServiceReportTest
     private final RingBuffer ringBuffer = new OneToOneRingBuffer(
         new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(BUFFER_SIZE)));
 
-    private final HeliosContext context = new HeliosContext();
-    private final HeliosDriver driver = new HeliosDriver(context);
-    private final Helios helios = new Helios(context, driver);
-
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenInputMessageProcessorIsNull()
     {
-        new ServiceReport(
-            new InputMessageProcessor(ringBuffer, helios.newStream(null, 0), new BusySpinIdleStrategy(), 0, ""),
-            null);
+        try(final Helios helios = new Helios())
+        {
+            new ServiceReport(
+                null,
+                new OutputMessageProcessor(ringBuffer, helios.newStream(null, 0), new BusySpinIdleStrategy(), ""));
+        }
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenOutputMessageProcessorIsNull()
     {
-        new ServiceReport(
-            null,
-            new OutputMessageProcessor(ringBuffer, helios.newStream(null, 0), new BusySpinIdleStrategy(), ""));
+        try(final Helios helios = new Helios())
+        {
+            new ServiceReport(
+                new InputMessageProcessor(ringBuffer, helios.newStream(null, 0), new BusySpinIdleStrategy(), 0, ""),
+                null);
+        }
     }
 }

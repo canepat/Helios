@@ -1,11 +1,13 @@
 package org.helios.journal.util;
 
+import org.agrona.CloseHelper;
 import org.helios.journal.strategy.PositionalJournalling;
 import org.helios.journal.strategy.SeekJournalling;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
@@ -125,15 +127,17 @@ public class JournalAllocatorTest
         checkAllocationAndRemove(JOURNAL_DIR, JOURNAL_FILE_SIZE, FilePreallocatorTest::checkNoAllocation);
     }
 
-    private static void shouldRotateNextJournalNumber(final JournalAllocator<?> allocator) throws IOException
+    private static <T extends Closeable> void shouldRotateNextJournalNumber(final JournalAllocator<T> allocator) throws IOException
     {
         assertThat(allocator.nextJournalNumber(), is(0));
 
         for (int i = 0; i < JOURNAL_COUNT; i++)
         {
-            allocator.getNextJournal();
+            final T nextJournal = allocator.getNextJournal();
 
             assertThat(allocator.nextJournalNumber(), is((i + 1 < JOURNAL_COUNT) ? (i + 1) : 0));
+
+            CloseHelper.close(nextJournal);
         }
 
         assertThat(allocator.nextJournalNumber(), is(0));

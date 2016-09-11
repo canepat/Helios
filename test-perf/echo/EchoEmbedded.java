@@ -13,11 +13,12 @@ public class EchoEmbedded
     private static final int SERVICE_INPUT_STREAM_ID = EchoConfiguration.SERVICE_INPUT_STREAM_ID;
     private static final int SERVICE_OUTPUT_STREAM_ID = EchoConfiguration.SERVICE_OUTPUT_STREAM_ID;
 
-    private static final CountDownLatch ASSOCIATION_LATCH = new CountDownLatch(1);
+    private static final CountDownLatch GW_ASSOCIATION_LATCH = new CountDownLatch(1);
+    private static final CountDownLatch SVC_ASSOCIATION_LATCH = new CountDownLatch(1);
 
     public static void main(String[] args) throws Exception
     {
-        System.out.print("Starting Helios service...");
+        System.out.print("Starting Helios...");
 
         final HeliosContext context = new HeliosContext()
             //.setJournalEnabled(true)
@@ -32,22 +33,31 @@ public class EchoEmbedded
         {
             helios.errorHandler(EchoEmbedded::serviceError);
 
-            System.out.print("done\nCreating Helios service and gateway...");
+            System.out.print("done\nCreating Helios service...");
 
             helios.addEmbeddedService(
-                SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID, new EchoServiceHandlerFactory());
+                SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID, new EchoServiceHandlerFactory())
+                    .availableAssociationHandler(EchoEmbedded::associationWithGatewayEstablished)
+                    .unavailableAssociationHandler(EchoEmbedded::associationWithGatewayBroken);
+
+            System.out.print("done\nCreating Helios gateway...");
+
             final Gateway<EchoGatewayHandler> gw = helios.addEmbeddedGateway(
-                SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID, new EchoGatewayHandlerFactory());
-            gw.availableAssociationHandler(EchoEmbedded::serviceAssociationEstablished);
-            gw.unavailableAssociationHandler(EchoEmbedded::serviceAssociationBroken);
+                SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID, new EchoGatewayHandlerFactory())
+                    .availableAssociationHandler(EchoEmbedded::associationWithServiceEstablished)
+                    .unavailableAssociationHandler(EchoEmbedded::associationWithServiceBroken);
 
             System.out.println("done\nEchoEmbedded is now running.");
 
             helios.start();
 
-            System.out.print("Waiting for association between Gateway and Service...");
+            System.out.print("Waiting for Gateway to see association with Service...");
 
-            ASSOCIATION_LATCH.await();
+            GW_ASSOCIATION_LATCH.await();
+
+            System.out.print("done\nWaiting for Service to see association with Gateway...");
+
+            SVC_ASSOCIATION_LATCH.await();
 
             System.out.println("done");
 
@@ -63,12 +73,23 @@ public class EchoEmbedded
         th.printStackTrace();
     }
 
-    private static void serviceAssociationEstablished()
+    private static void associationWithServiceEstablished()
     {
-        ASSOCIATION_LATCH.countDown();
+        GW_ASSOCIATION_LATCH.countDown();
     }
 
-    private static void serviceAssociationBroken()
+    private static void associationWithServiceBroken()
     {
+        System.out.println("Association with Service broken.");
+    }
+
+    private static void associationWithGatewayEstablished()
+    {
+        SVC_ASSOCIATION_LATCH.countDown();
+    }
+
+    private static void associationWithGatewayBroken()
+    {
+        System.out.println("Association with Gateway broken.");
     }
 }

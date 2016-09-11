@@ -30,22 +30,25 @@ public final class GatewayReport implements RateReport
     @Override
     public void print(final PrintStream stream)
     {
-        final long newTimeStamp = System.currentTimeMillis();
-        long newSuccessfulWrites = requestProcessor.handler().successfulWrites();
-        long newBytesWritten = requestProcessor.handler().bytesWritten();
-        long newSuccessfulReads = responseProcessor.successfulReads();
+        final long timeStamp = System.currentTimeMillis();
+        long successfulWrites = requestProcessor.handler().successfulWrites();
+        long bytesWritten = requestProcessor.handler().bytesWritten();
+        long successfulReads = responseProcessor.successfulReads();
+        long failedReads = responseProcessor.failedReads();
 
-        final long duration = newTimeStamp - lastTimeStamp;
-        final long successfulWritesDelta = newSuccessfulWrites - lastSuccessfulWrites;
-        final long bytesTransferred = newBytesWritten - lastBytesWritten;
-        final long successfulReadsDelta = newSuccessfulReads - lastSuccessfulReads;
+        final long duration = timeStamp - lastTimeStamp;
+        final long successfulWritesDelta = successfulWrites - lastSuccessfulWrites;
+        final long bytesTransferred = bytesWritten - lastBytesWritten;
+        final long successfulReadsDelta = successfulReads - lastSuccessfulReads;
 
-        stream.format("GatewayReport: T %dms OUT %,d messages - %,d bytes - IN %,d messages\n",
-            duration, successfulWritesDelta, bytesTransferred, successfulReadsDelta);
+        final double failureRatio = failedReads / (double)(successfulReads + failedReads);
 
-        lastTimeStamp = newTimeStamp;
-        lastSuccessfulWrites = newSuccessfulWrites;
-        lastBytesWritten = newBytesWritten;
-        lastSuccessfulReads = newSuccessfulReads;
+        stream.format("GatewayReport: T %dms OUT %,d messages - %,d bytes - IN %,d messages [read failure ratio: %f]\n",
+            duration, successfulWritesDelta, bytesTransferred, successfulReadsDelta, failureRatio);
+
+        lastTimeStamp = timeStamp;
+        lastSuccessfulWrites = successfulWrites;
+        lastBytesWritten = bytesWritten;
+        lastSuccessfulReads = successfulReads;
     }
 }

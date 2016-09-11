@@ -5,10 +5,10 @@ import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.infra.MessageTypes;
-import org.helios.service.ServiceHandler;
+import org.helios.mmb.sbe.MMBHeaderTypeDecoder;
 import org.helios.mmb.sbe.MessageHeaderDecoder;
-import org.helios.mmb.sbe.MmbHeaderTypeDecoder;
 import org.helios.mmb.sbe.SaveSnapshotDecoder;
+import org.helios.service.ServiceHandler;
 
 public class EchoServiceHandler implements ServiceHandler
 {
@@ -43,7 +43,7 @@ public class EchoServiceHandler implements ServiceHandler
 
                 saveSnapshotDecoder.wrap(buffer, bufferOffset, actingBlockLength, actingVersion);
 
-                final MmbHeaderTypeDecoder mmbHeader = saveSnapshotDecoder.mMBHeader();
+                final MMBHeaderTypeDecoder mmbHeader = saveSnapshotDecoder.mmbHeader();
                 final long messageId = mmbHeader.messageId();
                 final short nodeId = mmbHeader.nodeId();
 

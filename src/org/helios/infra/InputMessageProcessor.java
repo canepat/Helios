@@ -1,7 +1,6 @@
 package org.helios.infra;
 
-import io.aeron.FragmentAssembler;
-import io.aeron.Subscription;
+import io.aeron.*;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
@@ -12,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.agrona.UnsafeAccess.UNSAFE;
 
-public class InputMessageProcessor implements Processor
+public class InputMessageProcessor implements Processor, AvailableImageHandler, UnavailableImageHandler
 {
     private static final long SUCCESSFUL_READS_OFFSET;
     private static final long FAILED_READS_OFFSET;
@@ -78,9 +77,18 @@ public class InputMessageProcessor implements Processor
                 idleStrategy.idle(fragmentsRead);
             }
         }
+    }
 
-        final double failureRatio = failedReads / (double)(successfulReads + failedReads);
-        System.out.format(processorThread.getName() + " read failure ratio: %f\n", failureRatio);
+    @Override
+    public void onAvailableImage(final Image image)
+    {
+        // TODO: when at least one image is present resume subscription polling
+    }
+
+    @Override
+    public void onUnavailableImage(final Image image)
+    {
+        // TODO: when no more images are present suspend subscription polling
     }
 
     @Override

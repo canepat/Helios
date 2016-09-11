@@ -1,10 +1,10 @@
 package org.helios.journal.util;
 
-import org.agrona.Verify;
 import org.helios.util.Check;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.function.Function;
 
 public final class JournalAllocator<T>
@@ -19,8 +19,8 @@ public final class JournalAllocator<T>
 
     public JournalAllocator(final Path journalDir, final int journalCount, final Function<Path, T> journalFactory)
     {
-        Verify.notNull(journalDir, "journalDir");
-        Verify.notNull(journalFactory, "journalFactory");
+        Objects.requireNonNull(journalDir, "journalDir");
+        Objects.requireNonNull(journalFactory, "journalFactory");
         Check.enforce(journalDir.toFile().exists(), "Non existent journal dir");
         Check.enforce(journalCount > 0, "Invalid non positive journal count");
 

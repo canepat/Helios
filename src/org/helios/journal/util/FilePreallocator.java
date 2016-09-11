@@ -1,6 +1,5 @@
 package org.helios.journal.util;
 
-import org.agrona.Verify;
 import org.helios.util.Check;
 
 import java.io.File;
@@ -8,6 +7,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.util.Objects;
 
 import static java.nio.file.StandardOpenOption.*;
 import static org.helios.journal.util.JournalNaming.JOURNAL_FILE_PREFIX;
@@ -22,7 +22,7 @@ public final class FilePreallocator
 
     public FilePreallocator(final Path journalDirPath, final int journalCount)
     {
-        Verify.notNull(journalDirPath, "journalDirPath");
+        Objects.requireNonNull(journalDirPath, "journalDirPath");
         Check.enforce(journalDirPath.toFile().isDirectory(), "Journal dir path is not a directory");
         Check.enforce(journalDirPath.toFile().exists(), "Non existent journal dir path");
         Check.enforce(journalCount > 0, "Invalid non positive journal count");
@@ -34,7 +34,7 @@ public final class FilePreallocator
 
     public void preallocate(final long journalSize, final AllocationMode allocationMode) throws IOException
     {
-        Verify.notNull(allocationMode, "allocationMode");
+        Objects.requireNonNull(allocationMode, "allocationMode");
         Check.enforce(journalSize > 0, "Invalid non positive journal size");
 
         deleteFiles();

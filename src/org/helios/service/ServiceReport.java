@@ -30,22 +30,25 @@ public final class ServiceReport implements RateReport
     @Override
     public void print(final PrintStream stream)
     {
-        final long newTimeStamp = System.currentTimeMillis();
-        long newSuccessfulReads = requestProcessor.successfulReads();
-        long newSuccessfulWrites = responseProcessor.handler().successfulWrites();
-        long newBytesWritten = responseProcessor.handler().bytesWritten();
+        final long timeStamp = System.currentTimeMillis();
+        long successfulReads = requestProcessor.successfulReads();
+        long successfulWrites = responseProcessor.handler().successfulWrites();
+        long bytesWritten = responseProcessor.handler().bytesWritten();
+        long failedReads = requestProcessor.failedReads();
 
-        final long duration = newTimeStamp - lastTimeStamp;
-        final long successfulReadsDelta = newSuccessfulReads - lastSuccessfulReads;
-        final long successfulWritesDelta = newSuccessfulWrites - lastSuccessfulWrites;
-        final long bytesTransferred = newBytesWritten - lastBytesWritten;
+        final long duration = timeStamp - lastTimeStamp;
+        final long successfulReadsDelta = successfulReads - lastSuccessfulReads;
+        final long successfulWritesDelta = successfulWrites - lastSuccessfulWrites;
+        final long bytesTransferred = bytesWritten - lastBytesWritten;
 
-        stream.format("ServiceReport: T %dms IN %,d messages - OUT %,d messages - %,d bytes\n",
-            duration, successfulReadsDelta, successfulWritesDelta, bytesTransferred);
+        final double failureRatio = failedReads / (double)(successfulReads + failedReads);
 
-        lastTimeStamp = newTimeStamp;
-        lastSuccessfulReads = newSuccessfulReads;
-        lastSuccessfulWrites = newSuccessfulWrites;
-        lastBytesWritten = newBytesWritten;
+        stream.format("ServiceReport: T %dms IN %,d messages - OUT %,d messages - %,d bytes [read failure ratio: %f]\n",
+            duration, successfulReadsDelta, successfulWritesDelta, bytesTransferred, failureRatio);
+
+        lastTimeStamp = timeStamp;
+        lastSuccessfulReads = successfulReads;
+        lastSuccessfulWrites = successfulWrites;
+        lastBytesWritten = bytesWritten;
     }
 }

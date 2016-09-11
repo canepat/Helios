@@ -3,13 +3,13 @@ package org.helios.journal;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.Verify;
 import org.agrona.concurrent.MessageHandler;
 import org.helios.journal.util.AllocationMode;
 import org.helios.util.DirectBufferAllocator;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.helios.journal.JournalRecordDescriptor.*;
@@ -24,7 +24,7 @@ public class JournalWriter implements MessageHandler, AutoCloseable
 
     public JournalWriter(final Journalling journalling, final boolean flushing)
     {
-        Verify.notNull(journalling, "journalling");
+        Objects.requireNonNull(journalling, "journalling");
 
         this.journalling = journalling;
         this.flushing = flushing;

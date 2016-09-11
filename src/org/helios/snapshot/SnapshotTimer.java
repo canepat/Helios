@@ -1,12 +1,12 @@
 package org.helios.snapshot;
 
 import org.agrona.TimerWheel;
-import org.agrona.Verify;
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.util.Check;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 public final class SnapshotTimer implements Runnable, AutoCloseable
@@ -28,9 +28,9 @@ public final class SnapshotTimer implements Runnable, AutoCloseable
 
     public SnapshotTimer(final TimerWheel timerWheel, final RingBuffer inputRingBuffer, final long snapshotPeriod)
     {
-        Verify.notNull(timerWheel, "timerWheel");
-        Verify.notNull(inputRingBuffer, "inputRingBuffer");
-        Verify.notNull(snapshotPeriod, "snapshotPeriod");
+        Objects.requireNonNull(timerWheel, "timerWheel");
+        Objects.requireNonNull(inputRingBuffer, "inputRingBuffer");
+        Objects.requireNonNull(snapshotPeriod, "snapshotPeriod");
         Check.enforce(0 < snapshotPeriod && snapshotPeriod <= MAX_SNAPSHOT_PERIOD, "snapshotPeriod out of range");
 
         this.timerWheel = timerWheel;

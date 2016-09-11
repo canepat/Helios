@@ -2,11 +2,11 @@ package org.helios.archive;
 
 import com.lmax.disruptor.EventHandler;
 import org.agrona.CloseHelper;
-import org.agrona.Verify;
 import org.helios.util.Check;
 
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.Objects;
 
 public class ArchiveEventHandler<E> implements EventHandler<E>, AutoCloseable
 {
@@ -17,8 +17,8 @@ public class ArchiveEventHandler<E> implements EventHandler<E>, AutoCloseable
     @SuppressWarnings("unchecked")
     ArchiveEventHandler(final Class<E> eventClass, final int batchSize, final ArchiveBatchHandler<E> batchHandler)
     {
-        Verify.notNull(eventClass, "eventClass");
-        Verify.notNull(batchHandler, "eventClass");
+        Objects.requireNonNull(eventClass, "eventClass");
+        Objects.requireNonNull(batchHandler, "eventClass");
         Check.enforce(batchSize > 0, "Non-positive batchSize");
 
         this.batchHandler = batchHandler;

@@ -57,9 +57,6 @@ public class RingBufferProcessor<T extends MessageHandler & AutoCloseable> imple
                 UNSAFE.putOrderedLong(this, SUCCESSFUL_READS_OFFSET, successfulReads + 1);
             }
         }
-
-        final double failureRatio = failedReads / (double)(successfulReads + failedReads);
-        System.out.format(processorThread.getName() + " read failure ratio: %f\n", failureRatio);
     }
 
     @Override

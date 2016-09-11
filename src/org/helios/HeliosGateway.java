@@ -1,5 +1,8 @@
 package org.helios;
 
+import io.aeron.AvailableImageHandler;
+import io.aeron.Image;
+import io.aeron.UnavailableImageHandler;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
@@ -18,7 +21,8 @@ import java.nio.ByteBuffer;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
-public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, AssociationHandler
+public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, AssociationHandler,
+    AvailableImageHandler, UnavailableImageHandler
 {
     private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.gateway.poll.frame_count_limit", 10);
 
@@ -83,6 +87,24 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
     {
         unavailableAssociationHandler = handler;
         return this;
+    }
+
+    @Override
+    public void onAvailableImage(final Image image)
+    {
+        svcResponseProcessor.onAvailableImage(image);
+
+        // TODO: send HEARTBEAT to service through GatewayHandler
+
+        onAssociationEstablished(); // TODO: remove after HEARTBEAT handling
+    }
+
+    @Override
+    public void onUnavailableImage(final Image image)
+    {
+        svcResponseProcessor.onUnavailableImage(image);
+
+        onAssociationBroken(); // TODO: remove after HEARTBEAT handling
     }
 
     @Override

@@ -18,15 +18,14 @@ package org.helios;
 import io.aeron.*;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
-import org.agrona.Verify;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.helios.service.Service;
-import org.helios.service.ServiceHandler;
-import org.helios.service.ServiceHandlerFactory;
 import org.helios.gateway.Gateway;
 import org.helios.gateway.GatewayHandler;
 import org.helios.gateway.GatewayHandlerFactory;
 import org.helios.infra.RateReporter;
+import org.helios.service.Service;
+import org.helios.service.ServiceHandler;
+import org.helios.service.ServiceHandlerFactory;
 import org.helios.util.ProcessorHelper;
 
 import java.util.Objects;
@@ -107,17 +106,23 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     public void onAvailableImage(final Image image)
     {
         final long subscriptionId = image.subscription().registrationId();
+        final String sourceIdentity = image.sourceIdentity();
+        final int sessionId = image.sessionId();
+        System.out.println("onAvailableImage subscription.registrationId="+image.subscription().registrationId()
+            +" subscription.channel="+image.subscription().channel()
+            +" subscription.streamId="+image.subscription().streamId()
+            +" sourceIdentity="+sourceIdentity+" sessionId="+sessionId);
 
         final HeliosService<?> svc = serviceRepository.get(subscriptionId);
         if (svc != null)
         {
-            svc.onAssociationEstablished();
+            svc.onAvailableImage(image);
         }
 
         final HeliosGateway<?> gw = gatewayRepository.get(subscriptionId);
         if (gw != null)
         {
-            gw.onAssociationEstablished();
+            gw.onAvailableImage(image);
         }
     }
 
@@ -129,13 +134,13 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         final HeliosService<?> svc = serviceRepository.get(subscriptionId);
         if (svc != null)
         {
-            svc.onAssociationBroken();
+            svc.onUnavailableImage(image);
         }
 
         final HeliosGateway<?> gw = gatewayRepository.get(subscriptionId);
         if (gw != null)
         {
-            gw.onAssociationBroken();
+            gw.onUnavailableImage(image);
         }
     }
 
@@ -169,7 +174,7 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         final HeliosService<T> svc = new HeliosService<>(context, reqStream, rspStream, factory);
         final long subscriptionId = svc.inputSubscriptionId();
         serviceRepository.put(subscriptionId, svc);
-
+        System.out.println("HeliosService subscriptionId="+subscriptionId);
         if (reporter != null)
         {
             reporter.add(svc.report());
@@ -190,14 +195,14 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     public <T extends GatewayHandler> Gateway<T> addGateway(final AeronStream reqStream, final AeronStream rspStream,
         final GatewayHandlerFactory<T> factory)
     {
-        Verify.notNull(reqStream, "reqStream");
-        Verify.notNull(rspStream, "rspStream");
-        Verify.notNull(factory, "factory");
+        Objects.requireNonNull(reqStream, "reqStream");
+        Objects.requireNonNull(rspStream, "rspStream");
+        Objects.requireNonNull(factory, "factory");
 
         final HeliosGateway<T> gw = new HeliosGateway<>(context, reqStream, rspStream, factory);
         final long subscriptionId = gw.inputSubscriptionId();
         gatewayRepository.put(subscriptionId, gw);
-
+        System.out.println("HeliosGateway subscriptionId="+subscriptionId);
         if (reporter != null)
         {
             reporter.add(gw.report());

@@ -5,10 +5,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.infra.MessageTypes;
-import org.helios.mmb.sbe.LoadSnapshotDecoder;
-import org.helios.mmb.sbe.MessageHeaderDecoder;
-import org.helios.mmb.sbe.MmbHeaderTypeDecoder;
-import org.helios.mmb.sbe.SaveSnapshotDecoder;
+import org.helios.mmb.sbe.*;
 import org.helios.util.DirectBufferAllocator;
 import org.junit.Test;
 
@@ -50,11 +47,11 @@ public class SnapshotTest
 
                 loadSnapshotDecoder.wrap(buffer, bufferOffset, actingBlockLength, actingVersion);
 
-                final MmbHeaderTypeDecoder mmbHeader = loadSnapshotDecoder.mMBHeader();
+                final MMBHeaderTypeDecoder mmbHeader = loadSnapshotDecoder.mmbHeader();
                 final long messageId = mmbHeader.messageId();
                 final short nodeId = mmbHeader.nodeId();
 
-                assertTrue(messageId == 0L);
+                assertTrue(messageId == 4L); // see Helios-MMB.xml
                 assertTrue(nodeId == 0);
             });
         }
@@ -85,11 +82,11 @@ public class SnapshotTest
 
                 saveSnapshotDecoder.wrap(buffer, bufferOffset, actingBlockLength, actingVersion);
 
-                final MmbHeaderTypeDecoder mmbHeader = saveSnapshotDecoder.mMBHeader();
+                final MMBHeaderTypeDecoder mmbHeader = saveSnapshotDecoder.mmbHeader();
                 final long messageId = mmbHeader.messageId();
                 final short nodeId = mmbHeader.nodeId();
 
-                assertTrue(messageId == 1L);
+                assertTrue(messageId == 3L); // see Helios-MMB.xml
                 assertTrue(nodeId == 0);
             });
         }

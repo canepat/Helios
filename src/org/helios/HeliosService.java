@@ -1,11 +1,15 @@
 package org.helios;
 
+import io.aeron.AvailableImageHandler;
+import io.aeron.Image;
+import io.aeron.UnavailableImageHandler;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.helios.infra.*;
 import org.helios.journal.JournalHandler;
 import org.helios.journal.JournalProcessor;
 import org.helios.journal.JournalWriter;
@@ -16,7 +20,6 @@ import org.helios.service.Service;
 import org.helios.service.ServiceHandler;
 import org.helios.service.ServiceHandlerFactory;
 import org.helios.service.ServiceReport;
-import org.helios.infra.*;
 import org.helios.util.DirectBufferAllocator;
 import org.helios.util.ProcessorHelper;
 
@@ -24,7 +27,8 @@ import java.nio.ByteBuffer;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
-public class HeliosService<T extends ServiceHandler> implements Service<T>, AssociationHandler
+public class HeliosService<T extends ServiceHandler> implements Service<T>, AssociationHandler,
+    AvailableImageHandler, UnavailableImageHandler
 {
     private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.service.poll.frame_count_limit", 10);
 
@@ -140,6 +144,22 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
     {
         unavailableAssociationHandler = handler;
         return this;
+    }
+
+    @Override
+    public void onAvailableImage(final Image image)
+    {
+        gwRequestProcessor.onAvailableImage(image);
+
+        onAssociationEstablished(); // TODO: remove after HEARTBEAT handling
+    }
+
+    @Override
+    public void onUnavailableImage(final Image image)
+    {
+        gwRequestProcessor.onUnavailableImage(image);
+
+        onAssociationBroken(); // TODO: remove after HEARTBEAT handling
     }
 
     @Override
