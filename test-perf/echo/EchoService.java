@@ -28,8 +28,9 @@ public class EchoService
 
             final AeronStream inputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream outputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            final Service<EchoServiceHandler> echoService = helios.addService(inputStream, outputStream,
-                new EchoServiceHandlerFactory());
+            final Service<EchoServiceHandler> echoService =
+                helios.addService(inputStream, EchoServiceHandler::new)
+                    .addGateway(outputStream);
             final EchoServiceHandler echoServiceHandler = echoService.handler();
 
             final CountDownLatch runningLatch = new CountDownLatch(1);

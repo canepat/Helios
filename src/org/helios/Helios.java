@@ -22,7 +22,9 @@ import org.agrona.collections.Long2ObjectHashMap;
 import org.helios.gateway.Gateway;
 import org.helios.gateway.GatewayHandler;
 import org.helios.gateway.GatewayHandlerFactory;
+import org.helios.infra.AvailableAssociationHandler;
 import org.helios.infra.RateReporter;
+import org.helios.infra.UnavailableAssociationHandler;
 import org.helios.service.Service;
 import org.helios.service.ServiceHandler;
 import org.helios.service.ServiceHandlerFactory;
@@ -111,7 +113,7 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         System.out.println("onAvailableImage subscription.registrationId="+image.subscription().registrationId()
             +" subscription.channel="+image.subscription().channel()
             +" subscription.streamId="+image.subscription().streamId()
-            +" sourceIdentity="+sourceIdentity+" sessionId="+sessionId);
+            +" sourceIdentity="+sourceIdentity+" sessionId="+sessionId+" correlationId="+image.correlationId());
 
         final HeliosService<?> svc = serviceRepository.get(subscriptionId);
         if (svc != null)
@@ -158,23 +160,32 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     public <T extends ServiceHandler> Service<T> addEmbeddedService(
         final int reqStreamId, final int rspStreamId, final ServiceHandlerFactory<T> factory)
     {
-        final AeronStream reqStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, reqStreamId);
-        final AeronStream rspStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, rspStreamId);
-
-        return addService(reqStream, rspStream, factory);
+        return addEmbeddedService(reqStreamId, rspStreamId, factory, null, null);
     }
 
-    public <T extends ServiceHandler> Service<T> addService(final AeronStream reqStream, final AeronStream rspStream,
-        final ServiceHandlerFactory<T> factory)
+    public <T extends ServiceHandler> Service<T> addEmbeddedService(
+        final int reqStreamId, final int rspStreamId, final ServiceHandlerFactory<T> factory,
+        final AvailableAssociationHandler availableHandler, final UnavailableAssociationHandler unavailableHandler)
+    {
+        final AeronStream reqStream = newStream(CommonContext.IPC_CHANNEL, reqStreamId);
+        final AeronStream rspStream = newStream(CommonContext.IPC_CHANNEL, rspStreamId);
+
+        final Service<T> svc = addService(reqStream, factory)
+            .availableAssociationHandler(availableHandler)
+            .unavailableAssociationHandler(unavailableHandler);
+
+        return svc.addGateway(rspStream);
+    }
+
+    public <T extends ServiceHandler> Service<T> addService(final AeronStream reqStream, final ServiceHandlerFactory<T> factory)
     {
         Objects.requireNonNull(reqStream, "reqStream");
-        Objects.requireNonNull(rspStream, "rspStream");
         Objects.requireNonNull(factory, "factory");
 
-        final HeliosService<T> svc = new HeliosService<>(context, reqStream, rspStream, factory);
+        final HeliosService<T> svc = new HeliosService<>(context, reqStream, factory);
         final long subscriptionId = svc.inputSubscriptionId();
         serviceRepository.put(subscriptionId, svc);
-        System.out.println("HeliosService subscriptionId="+subscriptionId);
+        System.out.println("HeliosService reqStream=" + reqStream + " subscriptionId="+subscriptionId);
         if (reporter != null)
         {
             reporter.add(svc.report());
@@ -186,10 +197,21 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     public <T extends GatewayHandler> Gateway<T> addEmbeddedGateway(
         final int reqStreamId, final int rspStreamId, final GatewayHandlerFactory<T> factory)
     {
-        final AeronStream reqStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, reqStreamId);
-        final AeronStream rspStream = new AeronStream(aeron, CommonContext.IPC_CHANNEL, rspStreamId);
+        return addEmbeddedGateway(reqStreamId, rspStreamId, factory, null, null);
+    }
 
-        return addGateway(reqStream, rspStream, factory);
+    public <T extends GatewayHandler> Gateway<T> addEmbeddedGateway(
+        final int reqStreamId, final int rspStreamId, final GatewayHandlerFactory<T> factory,
+        final AvailableAssociationHandler availableHandler, final UnavailableAssociationHandler unavailableHandler)
+    {
+        final AeronStream reqStream = newStream(CommonContext.IPC_CHANNEL, reqStreamId);
+        final AeronStream rspStream = newStream(CommonContext.IPC_CHANNEL, rspStreamId);
+
+        final Gateway<T> gw = addGateway(reqStream, rspStream, factory)
+            .availableAssociationHandler(availableHandler)
+            .unavailableAssociationHandler(unavailableHandler);
+
+        return gw;
     }
 
     public <T extends GatewayHandler> Gateway<T> addGateway(final AeronStream reqStream, final AeronStream rspStream,

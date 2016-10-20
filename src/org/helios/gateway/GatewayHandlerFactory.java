@@ -4,5 +4,5 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 
 public interface GatewayHandlerFactory<T extends GatewayHandler>
 {
-    T createGatewayHandler(final RingBuffer... outputBuffers);
+    T createGatewayHandler(final RingBuffer ringBuffer);
 }

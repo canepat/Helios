@@ -1,7 +1,8 @@
-package org.helios.infra;
+package org.helios.heartbeat;
 
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.helios.infra.MessageTypes;
 
 import java.util.Objects;
 

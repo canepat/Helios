@@ -6,9 +6,10 @@ import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.Helios;
 import org.helios.infra.InputMessageProcessor;
-import org.helios.infra.OutputMessageProcessor;
 import org.helios.util.DirectBufferAllocator;
 import org.junit.Test;
+
+import java.util.ArrayList;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
@@ -22,12 +23,7 @@ public class ServiceReportTest
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenInputMessageProcessorIsNull()
     {
-        try(final Helios helios = new Helios())
-        {
-            new ServiceReport(
-                null,
-                new OutputMessageProcessor(ringBuffer, helios.newStream(null, 0), new BusySpinIdleStrategy(), ""));
-        }
+        new ServiceReport(null, new ArrayList<>());
     }
 
     @Test(expected = NullPointerException.class)

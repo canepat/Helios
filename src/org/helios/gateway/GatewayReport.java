@@ -22,9 +22,6 @@ public final class GatewayReport implements RateReport
         this.responseProcessor = responseProcessor;
 
         lastTimeStamp = System.currentTimeMillis();
-        lastSuccessfulWrites = requestProcessor.handler().successfulWrites();
-        lastBytesWritten = requestProcessor.handler().bytesWritten();
-        lastSuccessfulReads = responseProcessor.successfulReads();
     }
 
     @Override

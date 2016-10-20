@@ -9,10 +9,11 @@ import org.helios.mmb.sbe.MMBHeaderTypeDecoder;
 import org.helios.mmb.sbe.MessageHeaderDecoder;
 import org.helios.mmb.sbe.SaveSnapshotDecoder;
 import org.helios.service.ServiceHandler;
+import org.helios.util.RingBufferPool;
 
 public class EchoServiceHandler implements ServiceHandler
 {
-    private final RingBuffer outputBuffer;
+    private final RingBufferPool ringBufferPool;
     private final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
     private final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
@@ -20,14 +21,16 @@ public class EchoServiceHandler implements ServiceHandler
 
     private long lastSnapshotTimestamp;
 
-    public EchoServiceHandler(final RingBuffer outputBuffer)
+    public EchoServiceHandler(final RingBufferPool ringBufferPool)
     {
-        this.outputBuffer = outputBuffer;
+        this.ringBufferPool = ringBufferPool;
     }
 
     @Override
     public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
     {
+        final RingBuffer outputBuffer = ringBufferPool.ringBuffers().iterator().next(); // FIXME: refactoring to avoid this API
+
         if (msgTypeId == MessageTypes.ADMINISTRATIVE_MSG_ID)
         {
             int bufferOffset = index;

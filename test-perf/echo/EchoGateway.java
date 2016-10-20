@@ -44,7 +44,7 @@ public class EchoGateway
             final AeronStream inputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream outputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
             final Gateway<EchoGatewayHandler> gw = helios.addGateway(outputStream, inputStream,
-                new EchoGatewayHandlerFactory());
+                EchoGatewayHandler::new);
             gw.availableAssociationHandler(EchoGateway::serviceAssociationEstablished);
             gw.unavailableAssociationHandler(EchoGateway::serviceAssociationBroken);
 

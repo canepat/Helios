@@ -22,8 +22,12 @@ import org.helios.service.ServiceHandlerFactory;
 import org.helios.service.ServiceReport;
 import org.helios.util.DirectBufferAllocator;
 import org.helios.util.ProcessorHelper;
+import org.helios.util.RingBufferPool;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
@@ -32,8 +36,10 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
 {
     private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.service.poll.frame_count_limit", 10);
 
+    private final HeliosContext context;
     private final InputMessageProcessor gwRequestProcessor;
-    private final OutputMessageProcessor gwResponseProcessor;
+    private final RingBufferPool ringBufferPool;
+    private final List<OutputMessageProcessor> gwResponseProcessorList;
     private final JournalProcessor journalProcessor;
     private final ReplicaProcessor replicaProcessor;
     private final RingBufferProcessor<T> serviceProcessor;
@@ -41,20 +47,15 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
     private AvailableAssociationHandler availableAssociationHandler;
     private UnavailableAssociationHandler unavailableAssociationHandler;
 
-    public HeliosService(final HeliosContext context, final AeronStream reqStream, final AeronStream rspStream,
-        final ServiceHandlerFactory<T> factory)
+    public HeliosService(final HeliosContext context, final AeronStream reqStream, final ServiceHandlerFactory<T> factory)
     {
-        final IdleStrategy writeIdleStrategy = context.writeIdleStrategy();
-        final IdleStrategy pollIdleStrategy = context.subscriberIdleStrategy();
+        this.context = context;
 
-        final ByteBuffer outputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
-        final RingBuffer outputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(outputBuffer));
+        ringBufferPool = new RingBufferPool();
+        gwResponseProcessorList = new ArrayList<>();
 
         final ByteBuffer inputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
-
-        gwResponseProcessor = new OutputMessageProcessor(outputRingBuffer, rspStream, writeIdleStrategy,
-            "gwResponseProcessor");
 
         final boolean isReplicaEnabled = context.isReplicaEnabled();
         final boolean isJournalEnabled = context.isJournalEnabled();
@@ -102,12 +103,31 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
 
         serviceProcessor = new RingBufferProcessor<>(
             isJournalEnabled ? journalRingBuffer : (isReplicaEnabled ? replicaRingBuffer : inputRingBuffer),
-            factory.createServiceHandler(outputRingBuffer), new BusySpinIdleStrategy(), "serviceProcessor");
+            factory.createServiceHandler(ringBufferPool), new BusySpinIdleStrategy(), "serviceProcessor");
 
+        final IdleStrategy pollIdleStrategy = context.subscriberIdleStrategy();
         gwRequestProcessor = new InputMessageProcessor(inputRingBuffer, reqStream, pollIdleStrategy, FRAME_COUNT_LIMIT,
             "gwRequestProcessor");
 
-        report = new ServiceReport(gwRequestProcessor, gwResponseProcessor);
+        report = new ServiceReport(gwRequestProcessor, gwResponseProcessorList);
+    }
+
+    @Override
+    public Service<T> addGateway(final AeronStream rspStream)
+    {
+        Objects.requireNonNull(rspStream, "rspStream");
+
+        final IdleStrategy writeIdleStrategy = context.writeIdleStrategy();
+
+        final ByteBuffer outputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+        final RingBuffer outputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(outputBuffer));
+
+        ringBufferPool.add(rspStream, outputRingBuffer);
+
+        gwResponseProcessorList.add(
+            new OutputMessageProcessor(outputRingBuffer, rspStream, writeIdleStrategy, "gwResponseProcessor")); // FIXME: gwResponseProcessor name
+
+        return this;
     }
 
     @Override
@@ -128,7 +148,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
         ProcessorHelper.start(serviceProcessor);
         ProcessorHelper.start(replicaProcessor);
         ProcessorHelper.start(journalProcessor);
-        ProcessorHelper.start(gwResponseProcessor);
+        gwResponseProcessorList.forEach(ProcessorHelper::start);
         ProcessorHelper.start(gwRequestProcessor);
     }
 
@@ -184,7 +204,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
     public void close()
     {
         CloseHelper.quietClose(gwRequestProcessor);
-        CloseHelper.quietClose(gwResponseProcessor);
+        gwResponseProcessorList.forEach(CloseHelper::quietClose);
         CloseHelper.quietClose(journalProcessor);
         CloseHelper.quietClose(replicaProcessor);
         CloseHelper.quietClose(serviceProcessor);

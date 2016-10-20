@@ -5,26 +5,24 @@ import org.helios.infra.OutputMessageProcessor;
 import org.helios.infra.RateReport;
 
 import java.io.PrintStream;
+import java.util.List;
 
 public final class ServiceReport implements RateReport
 {
     private final InputMessageProcessor requestProcessor;
-    private final OutputMessageProcessor responseProcessor;
+    private final List<OutputMessageProcessor> responseProcessorList;
 
     private long lastTimeStamp;
     private long lastSuccessfulReads;
     private long lastSuccessfulWrites;
     private long lastBytesWritten;
 
-    public ServiceReport(final InputMessageProcessor requestProcessor, final OutputMessageProcessor responseProcessor)
+    public ServiceReport(final InputMessageProcessor requestProcessor, final List<OutputMessageProcessor> responseProcessorList)
     {
         this.requestProcessor = requestProcessor;
-        this.responseProcessor = responseProcessor;
+        this.responseProcessorList = responseProcessorList;
 
         lastTimeStamp = System.currentTimeMillis();
-        lastSuccessfulReads = requestProcessor.successfulReads();
-        lastSuccessfulWrites = responseProcessor.handler().successfulWrites();
-        lastBytesWritten = responseProcessor.handler().bytesWritten();
     }
 
     @Override
@@ -32,8 +30,8 @@ public final class ServiceReport implements RateReport
     {
         final long timeStamp = System.currentTimeMillis();
         long successfulReads = requestProcessor.successfulReads();
-        long successfulWrites = responseProcessor.handler().successfulWrites();
-        long bytesWritten = responseProcessor.handler().bytesWritten();
+        long successfulWrites = responseProcessorList.get(0).handler().successfulWrites(); // FIXME: handle responseProcessorList
+        long bytesWritten = responseProcessorList.get(0).handler().bytesWritten(); // FIXME: handle responseProcessorList
         long failedReads = requestProcessor.failedReads();
 
         final long duration = timeStamp - lastTimeStamp;

@@ -1,8 +1,8 @@
 package org.helios.service;
 
-import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.helios.util.RingBufferPool;
 
 public interface ServiceHandlerFactory<T extends ServiceHandler>
 {
-    T createServiceHandler(final RingBuffer... outputBuffers);
+    T createServiceHandler(final RingBufferPool ringBufferPool);
 }

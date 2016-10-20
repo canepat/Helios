@@ -35,17 +35,18 @@ public class EchoEmbedded
 
             System.out.print("done\nCreating Helios service...");
 
-            helios.addEmbeddedService(
-                SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID, new EchoServiceHandlerFactory())
-                    .availableAssociationHandler(EchoEmbedded::associationWithGatewayEstablished)
-                    .unavailableAssociationHandler(EchoEmbedded::associationWithGatewayBroken);
+            helios.addEmbeddedService(SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID,
+                EchoServiceHandler::new,
+                EchoEmbedded::associationWithGatewayEstablished,
+                EchoEmbedded::associationWithGatewayBroken);
 
             System.out.print("done\nCreating Helios gateway...");
 
             final Gateway<EchoGatewayHandler> gw = helios.addEmbeddedGateway(
-                SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID, new EchoGatewayHandlerFactory())
-                    .availableAssociationHandler(EchoEmbedded::associationWithServiceEstablished)
-                    .unavailableAssociationHandler(EchoEmbedded::associationWithServiceBroken);
+                SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID,
+                EchoGatewayHandler::new,
+                EchoEmbedded::associationWithServiceEstablished,
+                EchoEmbedded::associationWithServiceBroken);
 
             System.out.println("done\nEchoEmbedded is now running.");
 
