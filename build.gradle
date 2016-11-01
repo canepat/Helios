@@ -10,7 +10,7 @@ apply plugin: 'idea'
 defaultTasks 'clean', 'build', 'install'
 
 group = 'org.helios'
-version = '0.0.3'
+version = '0.0.4-RC'
 
 ext.isReleaseVersion = !version.endsWith("-RC")
 
