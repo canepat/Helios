@@ -30,17 +30,21 @@ import org.helios.service.ServiceHandler;
 import org.helios.service.ServiceHandlerFactory;
 import org.helios.util.ProcessorHelper;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
 public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandler, UnavailableImageHandler
 {
     private final HeliosContext context;
-    private final HeliosDriver driver;
     private final Aeron aeron;
+    private final HeliosDriver driver;
     private Consumer<Throwable> errorHandler;
-    private final Long2ObjectHashMap<HeliosService<?>> serviceRepository;
-    private final Long2ObjectHashMap<HeliosGateway<?>> gatewayRepository;
+    private final List<HeliosService<?>> serviceList;
+    private final List<HeliosGateway<?>> gatewayList;
+    private final Long2ObjectHashMap<HeliosService<?>> serviceSubscriptionRepository;
+    private final Long2ObjectHashMap<HeliosGateway<?>> gatewaySubscriptionRepository;
 
     private RateReporter reporter;
 
@@ -69,16 +73,18 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
 
         errorHandler = System.err::println;
 
-        serviceRepository = new Long2ObjectHashMap<>();
-        gatewayRepository = new Long2ObjectHashMap<>();
+        serviceList = new ArrayList<>();
+        gatewayList = new ArrayList<>();
+        serviceSubscriptionRepository = new Long2ObjectHashMap<>();
+        gatewaySubscriptionRepository = new Long2ObjectHashMap<>();
 
         reporter = context.isReportingEnabled() ? new RateReporter() : null;
     }
 
     public void start()
     {
-        gatewayRepository.values().forEach(Gateway::start);
-        serviceRepository.values().forEach(Service::start);
+        gatewayList.forEach(Gateway::start);
+        serviceList.forEach(Service::start);
 
         ProcessorHelper.start(reporter);
     }
@@ -88,11 +94,13 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     {
         CloseHelper.quietClose(reporter);
 
-        gatewayRepository.values().forEach(CloseHelper::quietClose);
-        gatewayRepository.clear();
+        gatewayList.forEach(CloseHelper::quietClose);
+        gatewayList.clear();
+        gatewaySubscriptionRepository.clear();
 
-        serviceRepository.values().forEach(CloseHelper::quietClose);
-        serviceRepository.clear();
+        serviceList.forEach(CloseHelper::quietClose);
+        serviceList.clear();
+        serviceSubscriptionRepository.clear();
 
         CloseHelper.quietClose(aeron);
         CloseHelper.quietClose(driver);
@@ -108,20 +116,14 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     public void onAvailableImage(final Image image)
     {
         final long subscriptionId = image.subscription().registrationId();
-        final String sourceIdentity = image.sourceIdentity();
-        final int sessionId = image.sessionId();
-        System.out.println("onAvailableImage subscription.registrationId="+image.subscription().registrationId()
-            +" subscription.channel="+image.subscription().channel()
-            +" subscription.streamId="+image.subscription().streamId()
-            +" sourceIdentity="+sourceIdentity+" sessionId="+sessionId+" correlationId="+image.correlationId());
 
-        final HeliosService<?> svc = serviceRepository.get(subscriptionId);
+        final HeliosService<?> svc = serviceSubscriptionRepository.get(subscriptionId);
         if (svc != null)
         {
             svc.onAvailableImage(image);
         }
 
-        final HeliosGateway<?> gw = gatewayRepository.get(subscriptionId);
+        final HeliosGateway<?> gw = gatewaySubscriptionRepository.get(subscriptionId);
         if (gw != null)
         {
             gw.onAvailableImage(image);
@@ -133,13 +135,13 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
     {
         final long subscriptionId = image.subscription().registrationId();
 
-        final HeliosService<?> svc = serviceRepository.get(subscriptionId);
+        final HeliosService<?> svc = serviceSubscriptionRepository.get(subscriptionId);
         if (svc != null)
         {
             svc.onUnavailableImage(image);
         }
 
-        final HeliosGateway<?> gw = gatewayRepository.get(subscriptionId);
+        final HeliosGateway<?> gw = gatewaySubscriptionRepository.get(subscriptionId);
         if (gw != null)
         {
             gw.onUnavailableImage(image);
@@ -157,79 +159,122 @@ public class Helios implements AutoCloseable, ErrorHandler, AvailableImageHandle
         return new AeronStream(aeron, channel, streamId);
     }
 
-    public <T extends ServiceHandler> Service<T> addEmbeddedService(
-        final int reqStreamId, final int rspStreamId, final ServiceHandlerFactory<T> factory)
+    public AeronStream newEmbeddedStream(final int streamId)
     {
-        return addEmbeddedService(reqStreamId, rspStreamId, factory, null, null);
+        return newStream(CommonContext.IPC_CHANNEL, streamId);
     }
 
-    public <T extends ServiceHandler> Service<T> addEmbeddedService(
-        final int reqStreamId, final int rspStreamId, final ServiceHandlerFactory<T> factory,
-        final AvailableAssociationHandler availableHandler, final UnavailableAssociationHandler unavailableHandler)
+    public <T extends ServiceHandler> Service<T> addService(final ServiceHandlerFactory<T> factory)
     {
-        final AeronStream reqStream = newStream(CommonContext.IPC_CHANNEL, reqStreamId);
-        final AeronStream rspStream = newStream(CommonContext.IPC_CHANNEL, rspStreamId);
-
-        final Service<T> svc = addService(reqStream, factory)
-            .availableAssociationHandler(availableHandler)
-            .unavailableAssociationHandler(unavailableHandler);
-
-        return svc.addGateway(rspStream);
-    }
-
-    public <T extends ServiceHandler> Service<T> addService(final AeronStream reqStream, final ServiceHandlerFactory<T> factory)
-    {
-        Objects.requireNonNull(reqStream, "reqStream");
         Objects.requireNonNull(factory, "factory");
 
-        final HeliosService<T> svc = new HeliosService<>(context, reqStream, factory);
-        final long subscriptionId = svc.inputSubscriptionId();
-        serviceRepository.put(subscriptionId, svc);
-        System.out.println("HeliosService reqStream=" + reqStream + " subscriptionId="+subscriptionId);
+        final HeliosService<T> svc = new HeliosService<>(this, factory);
+        serviceList.add(svc);
+
         if (reporter != null)
         {
-            reporter.add(svc.report());
+            reporter.addAll(svc.reportList());
         }
 
         return svc;
     }
 
-    public <T extends GatewayHandler> Gateway<T> addEmbeddedGateway(
-        final int reqStreamId, final int rspStreamId, final GatewayHandlerFactory<T> factory)
+    public <T extends ServiceHandler> Service<T> addService(final ServiceHandlerFactory<T> factory,
+        final AeronStream reqStream, final AeronStream rspStream)
     {
-        return addEmbeddedGateway(reqStreamId, rspStreamId, factory, null, null);
+        final Service<T> svc = addService(factory);
+
+        return svc.addEndPoint(reqStream, rspStream);
     }
 
-    public <T extends GatewayHandler> Gateway<T> addEmbeddedGateway(
-        final int reqStreamId, final int rspStreamId, final GatewayHandlerFactory<T> factory,
+    public <T extends ServiceHandler> Service<T> addService(final ServiceHandlerFactory<T> factory,
         final AvailableAssociationHandler availableHandler, final UnavailableAssociationHandler unavailableHandler)
     {
-        final AeronStream reqStream = newStream(CommonContext.IPC_CHANNEL, reqStreamId);
-        final AeronStream rspStream = newStream(CommonContext.IPC_CHANNEL, rspStreamId);
+        final Service<T> svc = addService(factory);
 
-        final Gateway<T> gw = addGateway(reqStream, rspStream, factory)
-            .availableAssociationHandler(availableHandler)
-            .unavailableAssociationHandler(unavailableHandler);
+        svc.availableAssociationHandler(availableHandler).unavailableAssociationHandler(unavailableHandler);
 
-        return gw;
+        return svc;
     }
 
-    public <T extends GatewayHandler> Gateway<T> addGateway(final AeronStream reqStream, final AeronStream rspStream,
-        final GatewayHandlerFactory<T> factory)
+    public <T extends ServiceHandler> Service<T> addService(final ServiceHandlerFactory<T> factory,
+        final AvailableAssociationHandler availableHandler, final UnavailableAssociationHandler unavailableHandler,
+        final AeronStream reqStream, final AeronStream rspStream)
     {
-        Objects.requireNonNull(reqStream, "reqStream");
-        Objects.requireNonNull(rspStream, "rspStream");
+        final Service<T> svc = addService(factory, availableHandler, unavailableHandler);
+
+        return svc.addEndPoint(reqStream, rspStream);
+    }
+
+    public <T extends GatewayHandler> Gateway<T> addGateway(final GatewayHandlerFactory<T> factory)
+    {
         Objects.requireNonNull(factory, "factory");
 
-        final HeliosGateway<T> gw = new HeliosGateway<>(context, reqStream, rspStream, factory);
-        final long subscriptionId = gw.inputSubscriptionId();
-        gatewayRepository.put(subscriptionId, gw);
-        System.out.println("HeliosGateway subscriptionId="+subscriptionId);
+        final HeliosGateway<T> gw = new HeliosGateway<>(this, factory);
+        gatewayList.add(gw);
+
         if (reporter != null)
         {
-            reporter.add(gw.report());
+            reporter.addAll(gw.reportList());
         }
 
         return gw;
+    }
+
+    public <T extends GatewayHandler> Gateway<T> addGateway(final GatewayHandlerFactory<T> factory,
+        final AeronStream reqStream, final AeronStream rspStream)
+    {
+        final Gateway<T> gw = addGateway(factory);
+
+        return gw.addEndPoint(reqStream, rspStream);
+    }
+
+    public <T extends GatewayHandler> Gateway<T> addGateway(final GatewayHandlerFactory<T> factory,
+        final AvailableAssociationHandler availableHandler, final UnavailableAssociationHandler unavailableHandler)
+    {
+        final Gateway<T> gw = addGateway(factory);
+
+        gw.availableAssociationHandler(availableHandler).unavailableAssociationHandler(unavailableHandler);
+
+        return gw;
+    }
+
+    public <T extends GatewayHandler> Gateway<T> addGateway(final GatewayHandlerFactory<T> factory,
+        final AvailableAssociationHandler availableHandler, final UnavailableAssociationHandler unavailableHandler,
+        final AeronStream reqStream, final AeronStream rspStream)
+    {
+        final Gateway<T> gw = addGateway(factory, availableHandler, unavailableHandler);
+
+        return gw.addEndPoint(reqStream, rspStream);
+    }
+
+    HeliosContext context()
+    {
+        return context;
+    }
+
+    Aeron aeron()
+    {
+        return aeron;
+    }
+
+    <T extends ServiceHandler> void addServiceSubscription(final long subscriptionId, final HeliosService<T> svc)
+    {
+        serviceSubscriptionRepository.put(subscriptionId, svc);
+    }
+
+    <T extends GatewayHandler> void addGatewaySubscription(final long subscriptionId, final HeliosGateway<T> gw)
+    {
+        gatewaySubscriptionRepository.put(subscriptionId, gw);
+    }
+
+    int numServiceSubscriptions()
+    {
+        return serviceSubscriptionRepository.size();
+    }
+
+    int numGatewaySubscriptions()
+    {
+        return gatewaySubscriptionRepository.size();
     }
 }

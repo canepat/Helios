@@ -34,7 +34,7 @@ public final class SnapshotMessageFactory
 
         loadSnapshotEncoder.wrap(loadSnapshotBuffer, bufferOffset)
             .mmbHeader()
-            .messageId(4L)
+            .messageNumber(0L)
             .nodeId((short)0)
             .timestamp(System.nanoTime());
 
@@ -52,7 +52,7 @@ public final class SnapshotMessageFactory
 
         saveSnapshotEncoder.wrap(saveSnapshotBuffer, bufferOffset)
             .mmbHeader()
-            .messageId(3L)
+            .messageNumber(0L)
             .nodeId((short)0)
             .timestamp(System.nanoTime());
     }

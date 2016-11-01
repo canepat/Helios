@@ -31,7 +31,7 @@ public final class HeartbeatMessageFactory
 
         heartbeatEncoder.wrap(heartbeatBuffer, bufferOffset)
             .mmbHeader()
-            .messageId(2L)
+            //.messageNumber(2L)
             .nodeId((short)0)
             .timestamp(System.nanoTime());
     }

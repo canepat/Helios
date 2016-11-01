@@ -55,7 +55,7 @@ public final class SnapshotTimer implements Runnable, AutoCloseable
     }
 
     @Override
-    public void close() throws Exception
+    public void close()
     {
         timer.cancel();
     }

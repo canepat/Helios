@@ -9,31 +9,38 @@ import java.util.Map;
 
 public final class RingBufferPool
 {
-    private final Map<AeronStream, RingBuffer> ringBufferMap;
+    private final Map<AeronStream, RingBuffer> outputRingBufferMap;
+    private final Map<AeronStream, RingBuffer> eventRingBufferMap;
 
     public RingBufferPool()
     {
-        ringBufferMap = new HashMap<>();
+        outputRingBufferMap = new HashMap<>();
+        eventRingBufferMap = new HashMap<>();
     }
 
-    public RingBuffer add(final AeronStream aeronStream, final RingBuffer ringBuffer)
+    public RingBuffer addOutputRingBuffer(final AeronStream aeronStream, final RingBuffer ringBuffer)
     {
-        return ringBufferMap.put(aeronStream, ringBuffer);
+        return outputRingBufferMap.put(aeronStream, ringBuffer);
     }
 
-    public RingBuffer remove(final AeronStream aeronStream)
+    public RingBuffer addEventRingBuffer(final AeronStream aeronStream, final RingBuffer ringBuffer)
     {
-        return ringBufferMap.remove(aeronStream);
+        return eventRingBufferMap.put(aeronStream, ringBuffer);
     }
 
-    public RingBuffer get(final AeronStream aeronStream)
+    public RingBuffer getOutputRingBuffer(final AeronStream aeronStream)
     {
-        return ringBufferMap.get(aeronStream);
+        return outputRingBufferMap.get(aeronStream);
     }
 
     // FIXME: remove
-    public Collection<RingBuffer> ringBuffers()
+    public Collection<RingBuffer> outputRingBuffers()
     {
-        return ringBufferMap.values();
+        return outputRingBufferMap.values();
+    }
+
+    public Collection<RingBuffer> eventRingBuffers()
+    {
+        return eventRingBufferMap.values();
     }
 }

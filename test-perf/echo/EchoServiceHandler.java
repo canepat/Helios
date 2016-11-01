@@ -13,7 +13,7 @@ import org.helios.util.RingBufferPool;
 
 public class EchoServiceHandler implements ServiceHandler
 {
-    private final RingBufferPool ringBufferPool;
+    private final RingBufferPool outputBufferPool;
     private final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
     private final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
@@ -21,15 +21,15 @@ public class EchoServiceHandler implements ServiceHandler
 
     private long lastSnapshotTimestamp;
 
-    public EchoServiceHandler(final RingBufferPool ringBufferPool)
+    public EchoServiceHandler(final RingBufferPool outputBufferPool)
     {
-        this.ringBufferPool = ringBufferPool;
+        this.outputBufferPool = outputBufferPool;
     }
 
     @Override
     public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
     {
-        final RingBuffer outputBuffer = ringBufferPool.ringBuffers().iterator().next(); // FIXME: refactoring to avoid this API
+        final RingBuffer outputBuffer = outputBufferPool.outputRingBuffers().iterator().next(); // FIXME: refactoring to avoid this API
 
         if (msgTypeId == MessageTypes.ADMINISTRATIVE_MSG_ID)
         {
@@ -47,10 +47,9 @@ public class EchoServiceHandler implements ServiceHandler
                 saveSnapshotDecoder.wrap(buffer, bufferOffset, actingBlockLength, actingVersion);
 
                 final MMBHeaderTypeDecoder mmbHeader = saveSnapshotDecoder.mmbHeader();
-                final long messageId = mmbHeader.messageId();
                 final short nodeId = mmbHeader.nodeId();
 
-                if (messageId == 0 && nodeId == 0)
+                if (nodeId == 0)
                 {
                     /* Save data snapshot: for ECHO SERVICE data is current time */
                     lastSnapshotTimestamp = System.nanoTime();

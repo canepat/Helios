@@ -19,9 +19,9 @@ public final class RateReporter implements Processor
         reporterThread = new Thread(this, "rateReporter");
     }
 
-    public void add(final RateReport report)
+    public void addAll(final List<RateReport> reports)
     {
-        reportList.add(report);
+        reportList.addAll(reports);
     }
 
     @Override

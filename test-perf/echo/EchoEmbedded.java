@@ -1,6 +1,7 @@
 package echo;
 
 import org.agrona.concurrent.BusySpinIdleStrategy;
+import org.helios.AeronStream;
 import org.helios.Helios;
 import org.helios.HeliosContext;
 import org.helios.HeliosDriver;
@@ -35,18 +36,17 @@ public class EchoEmbedded
 
             System.out.print("done\nCreating Helios service...");
 
-            helios.addEmbeddedService(SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID,
-                EchoServiceHandler::new,
-                EchoEmbedded::associationWithGatewayEstablished,
-                EchoEmbedded::associationWithGatewayBroken);
+            final AeronStream svcEmbeddedInputStream = helios.newEmbeddedStream(SERVICE_INPUT_STREAM_ID);
+            final AeronStream svcEmbeddedOutputStream = helios.newEmbeddedStream(SERVICE_OUTPUT_STREAM_ID);
+            helios.addService(EchoServiceHandler::new,
+                EchoEmbedded::associationWithGatewayEstablished, EchoEmbedded::associationWithGatewayBroken,
+                svcEmbeddedInputStream, svcEmbeddedOutputStream);
 
             System.out.print("done\nCreating Helios gateway...");
 
-            final Gateway<EchoGatewayHandler> gw = helios.addEmbeddedGateway(
-                SERVICE_INPUT_STREAM_ID, SERVICE_OUTPUT_STREAM_ID,
-                EchoGatewayHandler::new,
-                EchoEmbedded::associationWithServiceEstablished,
-                EchoEmbedded::associationWithServiceBroken);
+            final Gateway<EchoGatewayHandler> gw = helios.addGateway(EchoGatewayHandler::new,
+                EchoEmbedded::associationWithServiceEstablished, EchoEmbedded::associationWithServiceBroken,
+                svcEmbeddedInputStream, svcEmbeddedOutputStream);
 
             System.out.println("done\nEchoEmbedded is now running.");
 

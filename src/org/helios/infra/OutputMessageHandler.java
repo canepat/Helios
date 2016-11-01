@@ -57,6 +57,11 @@ public class OutputMessageHandler implements MessageHandler, AutoCloseable
         CloseHelper.quietClose(outputPublication);
     }
 
+    public long outputPublicationId()
+    {
+        return this.outputPublication.registrationId();
+    }
+
     public long successfulWrites()
     {
         return successfulWrites;

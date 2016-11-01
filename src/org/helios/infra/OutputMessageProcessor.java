@@ -9,12 +9,6 @@ public class OutputMessageProcessor extends RingBufferProcessor<OutputMessageHan
     public OutputMessageProcessor(final RingBuffer outputRingBuffer, final AeronStream outputStream,
         final IdleStrategy idleStrategy, final String threadName)
     {
-        this(outputRingBuffer, new OutputMessageHandler(outputStream, idleStrategy), idleStrategy, threadName);
-    }
-
-    public OutputMessageProcessor(final RingBuffer outputRingBuffer, final OutputMessageHandler outputHandler,
-        final IdleStrategy idleStrategy, final String threadName)
-    {
-        super(outputRingBuffer, outputHandler, idleStrategy, threadName);
+        super(outputRingBuffer, new OutputMessageHandler(outputStream, idleStrategy), idleStrategy, threadName);
     }
 }

@@ -16,49 +16,99 @@ import org.helios.gateway.GatewayReport;
 import org.helios.infra.*;
 import org.helios.util.DirectBufferAllocator;
 import org.helios.util.ProcessorHelper;
+import org.helios.util.RingBufferPool;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
 public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, AssociationHandler,
     AvailableImageHandler, UnavailableImageHandler
 {
-    private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.gateway.poll.frame_count_limit", 10);
+    private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.gateway.poll.frame_count_limit", 10); // TODO: from HeliosContext
 
+    private final Helios helios;
     private final InputMessageProcessor svcResponseProcessor;
-    private final OutputMessageProcessor svcRequestProcessor;
+    private final RingBufferPool ringBufferPool;
+    private final List<OutputMessageProcessor> svcRequestProcessorList;
     private final RingBufferProcessor<T> gatewayProcessor;
-    private final RateReport report;
+    private final List<InputMessageProcessor> eventProcessorList;
+    private final List<RateReport> reportList;
     private AvailableAssociationHandler availableAssociationHandler;
     private UnavailableAssociationHandler unavailableAssociationHandler;
 
-    public HeliosGateway(final HeliosContext context, final AeronStream reqStream, final AeronStream rspStream,
-        final GatewayHandlerFactory<T> factory)
+    public HeliosGateway(final Helios helios, final GatewayHandlerFactory<T> factory)
     {
+        this.helios = helios;
+
+        ringBufferPool = new RingBufferPool();
+        svcRequestProcessorList = new ArrayList<>();
+        eventProcessorList = new ArrayList<>();
+        reportList = new ArrayList<>();
+
+        final ByteBuffer inputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+        final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
+
+        final T gatewayHandler = factory.createGatewayHandler(ringBufferPool);
+        gatewayProcessor = new RingBufferProcessor<>(inputRingBuffer, gatewayHandler, new BusySpinIdleStrategy(), "gwProcessor");
+
+        final IdleStrategy pollIdleStrategy = helios.context().subscriberIdleStrategy();
+        svcResponseProcessor = new InputMessageProcessor(inputRingBuffer, pollIdleStrategy, FRAME_COUNT_LIMIT, "svcResponseProcessor");
+    }
+
+    @Override
+    public Gateway<T> addEndPoint(final AeronStream reqStream, final AeronStream rspStream)
+    {
+        Objects.requireNonNull(reqStream, "reqStream");
+        Objects.requireNonNull(rspStream, "rspStream");
+
         final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
         final ByteBuffer outputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
         final RingBuffer outputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(outputBuffer));
 
-        svcRequestProcessor = new OutputMessageProcessor(outputRingBuffer, reqStream, idleStrategy, "svcRequestProcessor");
+        ringBufferPool.addOutputRingBuffer(reqStream, outputRingBuffer);
 
-        final ByteBuffer inputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
-        final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
+        final OutputMessageProcessor svcRequestProcessor =
+            new OutputMessageProcessor(outputRingBuffer, reqStream, idleStrategy, "svcRequestProcessor");
 
-        gatewayProcessor = new RingBufferProcessor<>(inputRingBuffer, factory.createGatewayHandler(outputRingBuffer),
-            idleStrategy, "gwProcessor");
+        svcRequestProcessorList.add(svcRequestProcessor);
 
-        svcResponseProcessor = new InputMessageProcessor(inputRingBuffer, rspStream, idleStrategy, FRAME_COUNT_LIMIT,
-            "svcResponseProcessor");
+        final long subscriptionId = svcResponseProcessor.addSubscription(rspStream);
+        helios.addGatewaySubscription(subscriptionId, this);
 
-        report = new GatewayReport(svcRequestProcessor, svcResponseProcessor);
+        reportList.add(new GatewayReport(svcRequestProcessor, svcResponseProcessor));
+
+        return this;
     }
 
     @Override
-    public RateReport report()
+    public Gateway<T> addEventChannel(final AeronStream eventStream)
     {
-        return report;
+        Objects.requireNonNull(eventStream, "eventStream");
+
+        final IdleStrategy readIdleStrategy = helios.context().readIdleStrategy();
+
+        final ByteBuffer eventBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+        final RingBuffer eventRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(eventBuffer));
+
+        ringBufferPool.addEventRingBuffer(eventStream, eventRingBuffer);
+
+        final InputMessageProcessor eventProcessor =
+            new InputMessageProcessor(eventRingBuffer, readIdleStrategy, FRAME_COUNT_LIMIT, "eventProcessor"); // FIXME: eventProcessor name
+
+        eventProcessorList.add(eventProcessor);
+
+        return this;
+    }
+
+    @Override
+    public List<RateReport> reportList()
+    {
+        return reportList;
     }
 
     @Override
@@ -71,7 +121,8 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
     public void start()
     {
         ProcessorHelper.start(gatewayProcessor);
-        ProcessorHelper.start(svcRequestProcessor);
+        eventProcessorList.forEach(ProcessorHelper::start);
+        svcRequestProcessorList.forEach(ProcessorHelper::start);
         ProcessorHelper.start(svcResponseProcessor);
     }
 
@@ -129,12 +180,8 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
     public void close()
     {
         CloseHelper.quietClose(svcResponseProcessor);
-        CloseHelper.quietClose(svcRequestProcessor);
+        svcRequestProcessorList.forEach(CloseHelper::quietClose);
+        eventProcessorList.forEach(CloseHelper::quietClose);
         CloseHelper.quietClose(gatewayProcessor);
-    }
-
-    long inputSubscriptionId()
-    {
-        return svcResponseProcessor.inputSubscription().registrationId();
     }
 }

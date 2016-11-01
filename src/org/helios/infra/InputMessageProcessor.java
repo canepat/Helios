@@ -7,6 +7,8 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.AeronStream;
 import org.helios.snapshot.Snapshot;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.agrona.UnsafeAccess.UNSAFE;
@@ -21,30 +23,31 @@ public class InputMessageProcessor implements Processor, AvailableImageHandler, 
 
     private final RingBuffer inputRingBuffer;
     private final InputMessageHandler handler;
-    private final Subscription inputSubscription;
+    private final Set<Subscription> inputSubscriptionList;
     private final int frameCountLimit;
     private final IdleStrategy idleStrategy;
     private final AtomicBoolean running;
     private final Thread processorThread;
 
-    public InputMessageProcessor(final RingBuffer inputRingBuffer, final AeronStream stream, final IdleStrategy idleStrategy,
-        final int frameCountLimit, final String threadName)
+    public InputMessageProcessor(final RingBuffer inputRingBuffer, final IdleStrategy idleStrategy, final int frameCountLimit, final String threadName)
     {
-        this(new InputMessageHandler(inputRingBuffer, idleStrategy), inputRingBuffer, stream, idleStrategy, frameCountLimit, threadName);
-    }
-
-    public InputMessageProcessor(final InputMessageHandler handler, final RingBuffer inputRingBuffer, final AeronStream stream,
-        final IdleStrategy idleStrategy, final int frameCountLimit, final String threadName)
-    {
-        this.handler = handler;
         this.inputRingBuffer = inputRingBuffer;
         this.idleStrategy = idleStrategy;
         this.frameCountLimit = frameCountLimit;
 
-        inputSubscription = stream.aeron.addSubscription(stream.channel, stream.streamId);
+        handler = new InputMessageHandler(inputRingBuffer, idleStrategy);
+        inputSubscriptionList = new LinkedHashSet<>();
 
         running = new AtomicBoolean(false);
         processorThread = new Thread(this, threadName);
+    }
+
+    public long addSubscription(final AeronStream stream)
+    {
+        final Subscription inputSubscription = stream.aeron.addSubscription(stream.channel, stream.streamId);
+        inputSubscriptionList.add(inputSubscription);
+
+        return inputSubscription.registrationId();
     }
 
     @Override
@@ -57,24 +60,30 @@ public class InputMessageProcessor implements Processor, AvailableImageHandler, 
     @Override
     public void run()
     {
-        // First of all, write the Save Data Snapshot message into the input pipeline.
-        Snapshot.writeLoadMessage(inputRingBuffer, idleStrategy);
+        // First of all, write the Load Data Snapshot message into the input pipeline.
+        Snapshot.writeLoadMessage(inputRingBuffer, idleStrategy); // TODO: is this the right place?
 
-        // Poll the input subscription for incoming data until running.
+        // Poll ALL the input subscriptions for incoming data until running.
         final FragmentAssembler dataHandler = new FragmentAssembler(handler);
 
+        int idleCount = 0;
         while (running.get())
         {
-            final int fragmentsRead = inputSubscription.poll(dataHandler, frameCountLimit);
+            int fragmentsRead = 0;
+            for (final Subscription inputSubscription: inputSubscriptionList)
+            {
+                fragmentsRead += inputSubscription.poll(dataHandler, frameCountLimit);
+            }
+
             if (0 == fragmentsRead)
             {
                 UNSAFE.putOrderedLong(this, FAILED_READS_OFFSET, failedReads + 1);
-                idleStrategy.idle(0);
+                idleStrategy.idle(idleCount++);
             }
             else
             {
                 UNSAFE.putOrderedLong(this, SUCCESSFUL_READS_OFFSET, successfulReads + 1);
-                idleStrategy.idle(fragmentsRead);
+                idleCount = 0;
             }
         }
     }
@@ -97,13 +106,8 @@ public class InputMessageProcessor implements Processor, AvailableImageHandler, 
         running.set(false);
         processorThread.join();
 
-        CloseHelper.quietClose(inputSubscription);
+        inputSubscriptionList.forEach(CloseHelper::quietClose);
         CloseHelper.quietClose(handler);
-    }
-
-    public Subscription inputSubscription()
-    {
-        return inputSubscription;
     }
 
     public long successfulReads()

@@ -9,6 +9,7 @@ import org.helios.HeliosContext;
 import org.helios.gateway.Gateway;
 import org.helios.infra.RateReport;
 
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -16,10 +17,10 @@ import static java.lang.System.nanoTime;
 
 public class EchoGateway
 {
-    public static final String INPUT_CHANNEL = EchoConfiguration.SERVICE_OUTPUT_CHANNEL;
-    public static final int INPUT_STREAM_ID = EchoConfiguration.SERVICE_OUTPUT_STREAM_ID;
-    public static final String OUTPUT_CHANNEL = EchoConfiguration.SERVICE_INPUT_CHANNEL;
-    public static final int OUTPUT_STREAM_ID = EchoConfiguration.SERVICE_INPUT_STREAM_ID;
+    private static final String INPUT_CHANNEL = EchoConfiguration.SERVICE_OUTPUT_CHANNEL;
+    private static final int INPUT_STREAM_ID = EchoConfiguration.SERVICE_OUTPUT_STREAM_ID;
+    private static final String OUTPUT_CHANNEL = EchoConfiguration.SERVICE_INPUT_CHANNEL;
+    private static final int OUTPUT_STREAM_ID = EchoConfiguration.SERVICE_INPUT_STREAM_ID;
 
     private static final int WARMUP_NUMBER_OF_MESSAGES = EchoConfiguration.WARMUP_NUMBER_OF_MESSAGES;
     private static final int WARMUP_NUMBER_OF_ITERATIONS = EchoConfiguration.WARMUP_NUMBER_OF_ITERATIONS;
@@ -43,10 +44,9 @@ public class EchoGateway
 
             final AeronStream inputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream outputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            final Gateway<EchoGatewayHandler> gw = helios.addGateway(outputStream, inputStream,
-                EchoGatewayHandler::new);
-            gw.availableAssociationHandler(EchoGateway::serviceAssociationEstablished);
-            gw.unavailableAssociationHandler(EchoGateway::serviceAssociationBroken);
+            final Gateway<EchoGatewayHandler> gw = helios.addGateway(EchoGatewayHandler::new,
+                EchoGateway::serviceAssociationEstablished, EchoGateway::serviceAssociationBroken,
+                outputStream, inputStream);
 
             helios.start();
 
@@ -62,10 +62,10 @@ public class EchoGateway
         }
     }
 
-    public static void runTest(final Gateway<EchoGatewayHandler> gw)
+    static void runTest(final Gateway<EchoGatewayHandler> gw)
     {
         final EchoGatewayHandler proxy = gw.handler();
-        final RateReport report = gw.report();
+        final List<RateReport> reportList = gw.reportList();
 
         System.out.println("Warming up... " + WARMUP_NUMBER_OF_ITERATIONS + " iterations of " + WARMUP_NUMBER_OF_MESSAGES + " messages");
 
@@ -95,7 +95,7 @@ public class EchoGateway
                     TimeUnit.NANOSECONDS.toMillis(elapsedTime),
                     ((double)NUMBER_OF_MESSAGES / (double)elapsedTime) * 1_000_000_000));
 
-            if (report != null) report.print(System.out);
+            reportList.forEach(report -> report.print(System.out));
 
             if (NUMBER_OF_ITERATIONS <= 0)
             {

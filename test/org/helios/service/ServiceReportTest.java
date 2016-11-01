@@ -4,14 +4,17 @@ import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.helios.Helios;
+import org.helios.*;
 import org.helios.infra.InputMessageProcessor;
+import org.helios.infra.OutputMessageProcessor;
 import org.helios.util.DirectBufferAllocator;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
+import static org.junit.Assert.assertTrue;
 
 public class ServiceReportTest
 {
@@ -23,17 +26,16 @@ public class ServiceReportTest
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenInputMessageProcessorIsNull()
     {
-        new ServiceReport(null, new ArrayList<>());
+        try (final Helios helios = new Helios())
+        {
+            new ServiceReport(null, new OutputMessageProcessor(ringBuffer, helios.newEmbeddedStream(0),
+                new BusySpinIdleStrategy(), ""));
+        }
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenOutputMessageProcessorIsNull()
     {
-        try(final Helios helios = new Helios())
-        {
-            new ServiceReport(
-                new InputMessageProcessor(ringBuffer, helios.newStream(null, 0), new BusySpinIdleStrategy(), 0, ""),
-                null);
-        }
+        new ServiceReport(new InputMessageProcessor(ringBuffer, new BusySpinIdleStrategy(), 0, ""), null);
     }
 }

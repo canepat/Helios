@@ -8,6 +8,7 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.infra.MessageTypes;
 import org.helios.gateway.GatewayHandler;
 import org.helios.util.DirectBufferAllocator;
+import org.helios.util.RingBufferPool;
 
 import static echo.EchoConfiguration.MESSAGE_LENGTH;
 import static org.agrona.UnsafeAccess.UNSAFE;
@@ -16,15 +17,15 @@ public class EchoGatewayHandler implements GatewayHandler
 {
     private static final long TIMESTAMP_OFFSET;
 
-    private final RingBuffer outputBuffer;
+    private final RingBufferPool outputBufferPool;
     private final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
     private final UnsafeBuffer echoBuffer = new UnsafeBuffer(DirectBufferAllocator.allocate(MESSAGE_LENGTH));
 
     private volatile long timestamp = 0;
 
-    public EchoGatewayHandler(final RingBuffer outputBuffer)
+    public EchoGatewayHandler(final RingBufferPool outputBufferPool)
     {
-        this.outputBuffer = outputBuffer;
+        this.outputBufferPool = outputBufferPool;
     }
 
     @Override
@@ -44,6 +45,8 @@ public class EchoGatewayHandler implements GatewayHandler
 
     public void sendEcho(final long echoTimestamp)
     {
+        final RingBuffer outputBuffer = outputBufferPool.outputRingBuffers().iterator().next(); // FIXME: refactoring to avoid this API
+
         echoBuffer.putLong(0, echoTimestamp);
 
         while (!outputBuffer.write(MessageTypes.APPLICATION_MSG_ID, echoBuffer, 0, MESSAGE_LENGTH))

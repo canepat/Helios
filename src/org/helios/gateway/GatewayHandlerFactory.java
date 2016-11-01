@@ -1,8 +1,8 @@
 package org.helios.gateway;
 
-import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.helios.util.RingBufferPool;
 
 public interface GatewayHandlerFactory<T extends GatewayHandler>
 {
-    T createGatewayHandler(final RingBuffer ringBuffer);
+    T createGatewayHandler(final RingBufferPool ringBufferPool);
 }

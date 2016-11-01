@@ -48,10 +48,8 @@ public class SnapshotTest
                 loadSnapshotDecoder.wrap(buffer, bufferOffset, actingBlockLength, actingVersion);
 
                 final MMBHeaderTypeDecoder mmbHeader = loadSnapshotDecoder.mmbHeader();
-                final long messageId = mmbHeader.messageId();
                 final short nodeId = mmbHeader.nodeId();
 
-                assertTrue(messageId == 4L); // see Helios-MMB.xml
                 assertTrue(nodeId == 0);
             });
         }
@@ -83,10 +81,8 @@ public class SnapshotTest
                 saveSnapshotDecoder.wrap(buffer, bufferOffset, actingBlockLength, actingVersion);
 
                 final MMBHeaderTypeDecoder mmbHeader = saveSnapshotDecoder.mmbHeader();
-                final long messageId = mmbHeader.messageId();
                 final short nodeId = mmbHeader.nodeId();
 
-                assertTrue(messageId == 3L); // see Helios-MMB.xml
                 assertTrue(nodeId == 0);
             });
         }

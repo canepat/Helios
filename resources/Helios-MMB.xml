@@ -30,12 +30,18 @@
     </types>
 
     <types>
+        <composite name="Component" description="MMB message identifiers">
+            <enum name="ComponentType" encodingType="char">
+                <validValue name="Service">S</validValue>
+                <validValue name="Gateway">G</validValue>
+            </enum>
+            <type name="componentId" primitiveType="uint8"/>
+        </composite>
         <composite name="MMBHeaderType" description="MMB message identifiers">
-            <type name="messageId" primitiveType="uint32"/>
-            <type name="topicSequence" primitiveType="uint64"/>
-            <type name="topicId" primitiveType="uint32"/>
+            <type name="messageNumber" primitiveType="uint64"/>
             <type name="nodeId" primitiveType="uint8"/>
             <type name="timestamp" primitiveType="uint64"/>
+            <ref name="component" type="Component"/>
         </composite>
     </types>
 
