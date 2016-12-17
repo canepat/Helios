@@ -1,10 +1,11 @@
-package org.helios.snapshot;
+package org.helios.mmb;
 
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.OneToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.infra.MessageTypes;
+import org.helios.mmb.SnapshotMessage;
 import org.helios.mmb.sbe.*;
 import org.helios.util.DirectBufferAllocator;
 import org.junit.Test;
@@ -12,13 +13,14 @@ import org.junit.Test;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 import static org.junit.Assert.assertTrue;
 
-public class SnapshotTest
+public class SnapshotMessageTest
 {
     private final int BUFFER_SIZE = (16 * 1024) + TRAILER_LENGTH;
 
     private final RingBuffer ringBuffer = new OneToOneRingBuffer(
         new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(BUFFER_SIZE)));
 
+    private final SnapshotMessage snapshotMessage = new SnapshotMessage();
     private final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
     private final LoadSnapshotDecoder loadSnapshotDecoder = new LoadSnapshotDecoder();
     private final SaveSnapshotDecoder saveSnapshotDecoder = new SaveSnapshotDecoder();
@@ -26,7 +28,7 @@ public class SnapshotTest
     @Test
     public void shouldWriteLoadSnapshotMessage()
     {
-        Snapshot.writeLoadMessage(ringBuffer, new BusySpinIdleStrategy());
+        snapshotMessage.writeLoadMessage(ringBuffer, new BusySpinIdleStrategy());
 
         int readBytes;
         do
@@ -59,7 +61,7 @@ public class SnapshotTest
     @Test
     public void shouldWriteSaveSnapshotMessage()
     {
-        Snapshot.writeSaveMessage(ringBuffer, new BusySpinIdleStrategy());
+        snapshotMessage.writeSaveMessage(ringBuffer, new BusySpinIdleStrategy());
 
         int readBytes;
         do
@@ -92,19 +94,19 @@ public class SnapshotTest
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenRingBufferIsNullInLoad()
     {
-        Snapshot.writeLoadMessage(null, new BusySpinIdleStrategy());
+        snapshotMessage.writeLoadMessage(null, new BusySpinIdleStrategy());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenRingBufferIsNullInSave()
     {
-        Snapshot.writeSaveMessage(null, new BusySpinIdleStrategy());
+        snapshotMessage.writeSaveMessage(null, new BusySpinIdleStrategy());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenIdleStrategyIsNullInLoad()
     {
-        Snapshot.writeLoadMessage(
+        snapshotMessage.writeLoadMessage(
             new OneToOneRingBuffer(new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(BUFFER_SIZE))),
             null);
     }
@@ -112,7 +114,7 @@ public class SnapshotTest
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenIdleStrategyIsNullInSave()
     {
-        Snapshot.writeSaveMessage(
+        snapshotMessage.writeSaveMessage(
             new OneToOneRingBuffer(new UnsafeBuffer(DirectBufferAllocator.allocateCacheAligned(BUFFER_SIZE))),
             null);
     }

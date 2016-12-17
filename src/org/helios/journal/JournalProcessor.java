@@ -26,6 +26,12 @@ public class JournalProcessor implements Processor
     }
 
     @Override
+    public String name()
+    {
+        return journallerThread.getName();
+    }
+
+    @Override
     public void start()
     {
         running.set(true);

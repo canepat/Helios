@@ -21,6 +21,9 @@ public class HeliosContext
     private IdleStrategy publisherIdleStrategy;
     private IdleStrategy subscriberIdleStrategy;
 
+    private int heartbeatInterval;
+    private int heartbeatLiveness;
+
     public HeliosContext()
     {
         setMediaDriverConf(HeliosConfiguration.MEDIA_DRIVER_CONF);
@@ -38,6 +41,9 @@ public class HeliosContext
         setWriteIdleStrategy(HeliosConfiguration.writeIdleStrategy());
         setPublisherIdleStrategy(HeliosConfiguration.publisherIdleStrategy());
         setSubscriberIdleStrategy(HeliosConfiguration.subscriberIdleStrategy());
+
+        setHeartbeatInterval(HeliosConfiguration.HEARTBEAT_INTERVAL_MS);
+        setHeartbeatLiveness(HeliosConfiguration.HEARTBEAT_LIVENESS);
     }
 
     public HeliosContext setMediaDriverConf(String mediaDriverConf)
@@ -118,6 +124,18 @@ public class HeliosContext
         return this;
     }
 
+    public HeliosContext setHeartbeatInterval(int heartbeatInterval)
+    {
+        this.heartbeatInterval = heartbeatInterval;
+        return this;
+    }
+
+    public HeliosContext setHeartbeatLiveness(int heartbeatLiveness)
+    {
+        this.heartbeatLiveness = heartbeatLiveness;
+        return this;
+    }
+
     public String getMediaDriverConf()
     {
         return mediaDriverConf;
@@ -181,5 +199,15 @@ public class HeliosContext
     public IdleStrategy subscriberIdleStrategy()
     {
         return subscriberIdleStrategy;
+    }
+
+    public int heartbeatInterval()
+    {
+        return heartbeatInterval;
+    }
+
+    public int heartbeatLiveness()
+    {
+        return heartbeatLiveness;
     }
 }

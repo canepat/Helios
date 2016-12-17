@@ -5,15 +5,11 @@ import org.agrona.CloseHelper;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.helios.AeronStream;
-import org.helios.snapshot.Snapshot;
-
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import org.helios.mmb.SnapshotMessage;
 
 import static org.agrona.UnsafeAccess.UNSAFE;
 
-public class InputMessageProcessor implements Processor, AvailableImageHandler, UnavailableImageHandler
+public class InputMessageProcessor implements Processor, AvailableImageHandler, UnavailableImageHandler, InputReport
 {
     private static final long SUCCESSFUL_READS_OFFSET;
     private static final long FAILED_READS_OFFSET;
@@ -22,68 +18,93 @@ public class InputMessageProcessor implements Processor, AvailableImageHandler, 
     private volatile long failedReads = 0;
 
     private final RingBuffer inputRingBuffer;
-    private final InputMessageHandler handler;
-    private final Set<Subscription> inputSubscriptionList;
+    private final Subscription inputSubscription;
+    private final InputMessageHandler inputMessageHandler;
+    private final FragmentAssembler dataHandler;
+    private final SnapshotMessage snapshotMessage;
     private final int frameCountLimit;
     private final IdleStrategy idleStrategy;
-    private final AtomicBoolean running;
+    private final long maxHeartbeatLiveness;
+    private long heartbeatLiveness;
+    private volatile boolean running;
+    private volatile boolean polling;
     private final Thread processorThread;
 
-    public InputMessageProcessor(final RingBuffer inputRingBuffer, final IdleStrategy idleStrategy, final int frameCountLimit, final String threadName)
+    public InputMessageProcessor(final RingBuffer inputRingBuffer, final IdleStrategy idleStrategy,
+        final int frameCountLimit, final long maxHeartbeatLiveness, final AeronStream stream,
+        final AssociationHandler associationHandler, final String threadName)
     {
         this.inputRingBuffer = inputRingBuffer;
         this.idleStrategy = idleStrategy;
         this.frameCountLimit = frameCountLimit;
+        this.maxHeartbeatLiveness = maxHeartbeatLiveness;
 
-        handler = new InputMessageHandler(inputRingBuffer, idleStrategy);
-        inputSubscriptionList = new LinkedHashSet<>();
+        inputSubscription = stream.aeron.addSubscription(stream.channel, stream.streamId);
+        inputMessageHandler = new InputMessageHandler(inputRingBuffer, idleStrategy, associationHandler);
+        dataHandler = new FragmentAssembler(inputMessageHandler);
+        snapshotMessage = new SnapshotMessage();
 
-        running = new AtomicBoolean(false);
+        heartbeatLiveness = maxHeartbeatLiveness;
+
+        running = false;
+        polling = false;
         processorThread = new Thread(this, threadName);
     }
 
-    public long addSubscription(final AeronStream stream)
+    @Override
+    public String name()
     {
-        final Subscription inputSubscription = stream.aeron.addSubscription(stream.channel, stream.streamId);
-        inputSubscriptionList.add(inputSubscription);
-
-        return inputSubscription.registrationId();
+        return processorThread.getName();
     }
 
     @Override
     public void start()
     {
-        running.set(true);
+        running = true;
         processorThread.start();
     }
 
     @Override
     public void run()
     {
-        // First of all, write the Load Data Snapshot message into the input pipeline.
-        Snapshot.writeLoadMessage(inputRingBuffer, idleStrategy); // TODO: is this the right place?
+        // First of all, write the Load Data SnapshotMessage message into the input pipeline.
+        snapshotMessage.writeLoadMessage(inputRingBuffer, idleStrategy); // TODO: is this the right place?
 
-        // Poll ALL the input subscriptions for incoming data until running.
-        final FragmentAssembler dataHandler = new FragmentAssembler(handler);
-
+        // Poll the input subscription for incoming data until running.
         int idleCount = 0;
-        while (running.get())
+        while (running)
         {
-            int fragmentsRead = 0;
-            for (final Subscription inputSubscription: inputSubscriptionList)
+            if (polling)
             {
-                fragmentsRead += inputSubscription.poll(dataHandler, frameCountLimit);
-            }
+                final int fragmentsRead = inputSubscription.poll(dataHandler, frameCountLimit);
+                if (0 == fragmentsRead)
+                {
+                    // No incoming data from poll
+                    heartbeatLiveness--;
+                    if (heartbeatLiveness == 0)
+                    {
+                        // TODO: notify heartbeat lost
 
-            if (0 == fragmentsRead)
-            {
-                UNSAFE.putOrderedLong(this, FAILED_READS_OFFSET, failedReads + 1);
-                idleStrategy.idle(idleCount++);
+                        heartbeatLiveness = maxHeartbeatLiveness;
+                    }
+
+                    // Update statistics
+                    UNSAFE.putOrderedLong(this, FAILED_READS_OFFSET, failedReads + 1);
+                    idleStrategy.idle(idleCount++);
+                }
+                else
+                {
+                    // Incoming data arrived from poll (it DOES NOT matter if heartbeat or not)
+                    heartbeatLiveness = maxHeartbeatLiveness;
+
+                    // Update statistics
+                    UNSAFE.putOrderedLong(this, SUCCESSFUL_READS_OFFSET, successfulReads + 1);
+                    idleCount = 0;
+                }
             }
             else
             {
-                UNSAFE.putOrderedLong(this, SUCCESSFUL_READS_OFFSET, successfulReads + 1);
-                idleCount = 0;
+                idleStrategy.idle(idleCount++);
             }
         }
     }
@@ -91,33 +112,73 @@ public class InputMessageProcessor implements Processor, AvailableImageHandler, 
     @Override
     public void onAvailableImage(final Image image)
     {
-        // TODO: when at least one image is present resume subscription polling
+        // When at least one image is present resume subscription polling
+        if (inputSubscription.imageCount() > 0)
+        {
+            polling = true;
+        }
     }
 
     @Override
     public void onUnavailableImage(final Image image)
     {
-        // TODO: when no more images are present suspend subscription polling
+        dataHandler.freeSessionBuffer(image.sessionId());
+
+        // When no more images are present suspend subscription polling
+        if (inputSubscription.imageCount() == 0)
+        {
+            polling = false;
+        }
     }
 
     @Override
     public void close() throws Exception
     {
-        running.set(false);
+        running = false;
         processorThread.join();
 
-        inputSubscriptionList.forEach(CloseHelper::quietClose);
-        CloseHelper.quietClose(handler);
+        CloseHelper.quietClose(inputSubscription);
     }
 
+    public long subscriptionId()
+    {
+        return inputSubscription.registrationId();
+    }
+
+    @Override
     public long successfulReads()
     {
         return successfulReads;
     }
 
+    @Override
     public long failedReads()
     {
         return failedReads;
+    }
+
+    @Override
+    public long heartbeatReceived()
+    {
+        return inputMessageHandler.heartbeatReceived();
+    }
+
+    @Override
+    public long administrativeMessages()
+    {
+        return inputMessageHandler.administrativeMessages();
+    }
+
+    @Override
+    public long applicationMessages()
+    {
+        return inputMessageHandler.applicationMessages();
+    }
+
+    @Override
+    public long bytesRead()
+    {
+        return inputMessageHandler.bytesRead();
     }
 
     static

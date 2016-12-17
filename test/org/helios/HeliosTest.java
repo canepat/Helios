@@ -11,6 +11,10 @@ import org.helios.gateway.Gateway;
 import org.helios.gateway.GatewayHandler;
 import org.helios.gateway.GatewayHandlerFactory;
 import org.helios.infra.MessageTypes;
+import org.helios.mmb.DataMessage;
+import org.helios.mmb.sbe.ComponentDecoder;
+import org.helios.mmb.sbe.ComponentType;
+import org.helios.mmb.sbe.DataDecoder;
 import org.helios.service.Service;
 import org.helios.service.ServiceHandler;
 import org.helios.util.RingBufferPool;
@@ -26,9 +30,6 @@ import static org.junit.Assert.assertTrue;
 
 public class HeliosTest
 {
-    private static final int EMBEDDED_INPUT_STREAM_ID = 10;
-    private static final int EMBEDDED_OUTPUT_STREAM_ID = 11;
-
     private static final String INPUT_CHANNEL = "aeron:udp?endpoint=localhost:40123";
     private static final String OUTPUT_CHANNEL = "aeron:udp?endpoint=localhost:40124";
     private static final int INPUT_STREAM_ID = 10;
@@ -37,20 +38,20 @@ public class HeliosTest
     private static final int NUM_GATEWAYS = 2; //2
 
     @Test
-    public void shouldAssociateOneEmbeddedServiceWithOneEmbeddedGateway() throws Exception
+    public void shouldAssociateOneServiceWithOneGatewayIPC() throws Exception
     {
         try(final Helios helios = new Helios())
         {
             final CountDownLatch s2gAssociationLatch = new CountDownLatch(1);
             final CountDownLatch g2sAssociationLatch = new CountDownLatch(1);
 
-            final AeronStream embeddedInputStream = helios.newEmbeddedStream(EMBEDDED_INPUT_STREAM_ID);
-            final AeronStream embeddedOutputStream = helios.newEmbeddedStream(EMBEDDED_OUTPUT_STREAM_ID);
+            final AeronStream ipcInputStream = helios.newIpcStream(INPUT_STREAM_ID);
+            final AeronStream ipcOutputStream = helios.newIpcStream(OUTPUT_STREAM_ID);
 
             helios.addService(NullServiceHandler::new, s2gAssociationLatch::countDown, ()->{},
-                embeddedInputStream, embeddedOutputStream);
+                ipcInputStream, ipcOutputStream);
             helios.addGateway(NullGatewayHandler::new, g2sAssociationLatch::countDown, ()->{},
-                embeddedInputStream, embeddedOutputStream);
+                ipcInputStream, ipcOutputStream);
 
             helios.start();
 
@@ -71,15 +72,15 @@ public class HeliosTest
 
             final AeronStream svcInputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream svcOutputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            helios.addService(NullServiceHandler::new)
+            helios.addService(NullServiceHandler::new, svcInputStream)
                 .availableAssociationHandler(s2gAssociationLatch::countDown)
-                .addEndPoint(svcInputStream, svcOutputStream);
+                .addEndPoint(svcOutputStream);
 
             final AeronStream gwOutputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream gwInputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            helios.addGateway(NullGatewayHandler::new)
+            helios.addGateway()
                 .availableAssociationHandler(g2sAssociationLatch::countDown)
-                .addEndPoint(gwOutputStream, gwInputStream);
+                .addEndPoint(gwOutputStream, gwInputStream, NullGatewayHandler::new);
 
             helios.start();
 
@@ -91,26 +92,26 @@ public class HeliosTest
     }
 
     @Test
-    public void shouldAssociateOneEmbeddedServiceWithMultipleEmbeddedGateways() throws Exception
+    public void shouldAssociateOneServiceWithMultipleGatewaysIPC() throws Exception
     {
         try(final Helios helios = new Helios())
         {
             final CountDownLatch s2gAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
             final CountDownLatch g2sAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
 
-            final AeronStream embeddedInputStream = helios.newEmbeddedStream(EMBEDDED_INPUT_STREAM_ID);
+            final AeronStream ipcInputStream = helios.newIpcStream(INPUT_STREAM_ID);
 
             final Service<NullServiceHandler> svc = helios.addService(NullServiceHandler::new,
-                s2gAssociationLatch::countDown, () -> {});
+                ipcInputStream, s2gAssociationLatch::countDown, () -> {});
 
             for (int i = 0; i < NUM_GATEWAYS; i++)
             {
-                final AeronStream embeddedOutputStream = helios.newEmbeddedStream(EMBEDDED_OUTPUT_STREAM_ID+i);
+                final AeronStream ipcOutputStream = helios.newIpcStream(OUTPUT_STREAM_ID+i);
 
-                svc.addEndPoint(embeddedInputStream, embeddedOutputStream);
+                svc.addEndPoint(ipcOutputStream);
 
                 helios.addGateway(NullGatewayHandler::new, g2sAssociationLatch::countDown, () -> {},
-                    embeddedInputStream, embeddedOutputStream);
+                    ipcInputStream, ipcOutputStream);
             }
 
             helios.start();
@@ -130,28 +131,82 @@ public class HeliosTest
             final CountDownLatch s2gAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
             final CountDownLatch g2sAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
 
-            final Service<NullServiceHandler> svc = helios.addService(NullServiceHandler::new)
+            final AeronStream svcInputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
+            final AeronStream gwOutputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
+
+            final Service<NullServiceHandler> svc = helios.addService(NullServiceHandler::new, svcInputStream)
                 .availableAssociationHandler(s2gAssociationLatch::countDown);
 
             for (int i = 0; i < NUM_GATEWAYS; i++)
             {
-                final AeronStream svcInputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
-                final AeronStream svcOutputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID+i);
-                svc.addEndPoint(svcInputStream, svcOutputStream);
+                final AeronStream svcOutputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID+NUM_GATEWAYS+i);
+                svc.addEndPoint(svcOutputStream);
 
-                final AeronStream gwOutputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
-                final AeronStream gwInputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID+i);
+                final AeronStream gwInputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID+NUM_GATEWAYS+i);
                 helios.addGateway(NullGatewayHandler::new, g2sAssociationLatch::countDown, () -> {},
                     gwOutputStream, gwInputStream);
             }
 
-            assertTrue(helios.numServiceSubscriptions() == NUM_GATEWAYS);
+            assertTrue(helios.numServiceSubscriptions() == 1);
             assertTrue(helios.numGatewaySubscriptions() == NUM_GATEWAYS);
 
             helios.start();
 
             s2gAssociationLatch.await();
             g2sAssociationLatch.await();
+        }
+
+        assertTrue(true);
+    }
+
+    @Test
+    public void shouldPingOneServiceWithOneGatewayIPC() throws Exception
+    {
+        try(final Helios helios = new Helios())
+        {
+            final CountDownLatch s2gAssociationLatch = new CountDownLatch(1);
+            final CountDownLatch g2sAssociationLatch = new CountDownLatch(1);
+            final CountDownLatch pingLatch = new CountDownLatch(1);
+
+            final AeronStream svcInputStream = helios.newIpcStream(INPUT_STREAM_ID);
+            final AeronStream svcOutputStream = helios.newIpcStream(OUTPUT_STREAM_ID);
+
+            final Service<PingServiceHandler> svc = helios.addService(PingServiceHandler::new,
+                s2gAssociationLatch::countDown, () -> {},
+                svcInputStream, svcOutputStream);
+
+            final int gatewayId = 1;
+            svc.handler().addOutputStream(gatewayId, svcOutputStream);// FIXME: define Helios Gateway-Service (HGS) protocol
+
+            final AeronStream gwOutputStream = helios.newIpcStream(INPUT_STREAM_ID);
+            final AeronStream gwInputStream = helios.newIpcStream(OUTPUT_STREAM_ID);
+            final Gateway<PingGatewayHandler> gw = helios.addGateway();
+            gw.availableAssociationHandler(g2sAssociationLatch::countDown);
+            final PingGatewayHandler pingHandler = gw.addEndPoint(gwOutputStream, gwInputStream,
+                (outputBufferPool) -> new PingGatewayHandler(gatewayId,
+                    outputBufferPool, gwOutputStream,
+                    (msgTypeId, buffer, index, length) -> {
+                        if (msgTypeId == MessageTypes.APPLICATION_MSG_ID)
+                        {
+                            assertTrue(buffer.getInt(index) == gatewayId);
+                            assertTrue(length == PingGatewayHandler.MESSAGE_LENGTH);
+                            pingLatch.countDown();
+                        }
+                        /*else
+                        {
+                            // ADMINISTRATIVE message type, ignore
+                        }*/
+                    })
+            );
+
+            helios.start();
+
+            s2gAssociationLatch.await();
+            g2sAssociationLatch.await();
+
+            pingHandler.sendPing();
+
+            pingLatch.await();
         }
 
         assertTrue(true);
@@ -168,42 +223,41 @@ public class HeliosTest
 
             final AeronStream svcInputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream svcOutputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            final Service<PingServiceHandler> svc = helios.addService(PingServiceHandler::new)
+            final Service<PingServiceHandler> svc = helios.addService(PingServiceHandler::new, svcInputStream)
                 .availableAssociationHandler(s2gAssociationLatch::countDown)
-                .addEndPoint(svcInputStream, svcOutputStream);
+                .addEndPoint(svcOutputStream);
 
             final int gatewayId = 1;
             svc.handler().addOutputStream(gatewayId, svcOutputStream);// FIXME: define Helios Gateway-Service (HGS) protocol
 
             final AeronStream gwOutputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream gwInputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            final Gateway<PingGatewayHandler> gw =
-                helios.addGateway(
-                    (outputBufferPool) -> new PingGatewayHandler(gatewayId,
-                        outputBufferPool, gwOutputStream,
-                        (msgTypeId, buffer, index, length) -> {
-                            if (msgTypeId == MessageTypes.APPLICATION_MSG_ID)
-                            {
-                                // APPLICATION message type, ignore */
-                                assertTrue(buffer.getInt(index) == gatewayId);
-                                assertTrue(length == PingGatewayHandler.MESSAGE_LENGTH);
-                                pingLatch.countDown();
-                            }
-                            /*else
-                            {
-                                // ADMINISTRATIVE message type, ignore
-                            }*/
-                        })
-                );
+            final Gateway<PingGatewayHandler> gw = helios.addGateway();
             gw.availableAssociationHandler(g2sAssociationLatch::countDown);
-            gw.addEndPoint(gwOutputStream, gwInputStream);
+            final PingGatewayHandler pingHandler = gw.addEndPoint(gwOutputStream, gwInputStream,
+                (outputBufferPool) -> new PingGatewayHandler(gatewayId,
+                    outputBufferPool, gwOutputStream,
+                    (msgTypeId, buffer, index, length) -> {
+                        if (msgTypeId == MessageTypes.APPLICATION_MSG_ID)
+                        {
+                            // APPLICATION message type, ignore */
+                            assertTrue(buffer.getInt(index) == gatewayId);
+                            assertTrue(length == PingGatewayHandler.MESSAGE_LENGTH);
+                            pingLatch.countDown();
+                        }
+                        /*else
+                        {
+                            // ADMINISTRATIVE message type, ignore
+                        }*/
+                    })
+            );
 
             helios.start();
 
             s2gAssociationLatch.await();
             g2sAssociationLatch.await();
 
-            gw.handler().sendPing();
+            pingHandler.sendPing();
 
             pingLatch.await();
         }
@@ -212,51 +266,42 @@ public class HeliosTest
     }
 
     @Test
-    public void shouldPingOneEmbeddedServiceWithOneEmbeddedGateway() throws Exception
+    public void shouldPingOneServiceWithMultipleGatewaysIPC() throws Exception
     {
         try(final Helios helios = new Helios())
         {
-            final CountDownLatch s2gAssociationLatch = new CountDownLatch(1);
-            final CountDownLatch g2sAssociationLatch = new CountDownLatch(1);
-            final CountDownLatch pingLatch = new CountDownLatch(1);
+            final CountDownLatch s2gAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
+            final CountDownLatch g2sAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
+            final CountDownLatch pingLatch = new CountDownLatch(NUM_GATEWAYS);
 
-            final AeronStream embeddedInputStream = helios.newEmbeddedStream(EMBEDDED_INPUT_STREAM_ID);
-            final AeronStream embeddedOutputStream = helios.newEmbeddedStream(EMBEDDED_OUTPUT_STREAM_ID);
+            final AeronStream ipcInputStream = helios.newIpcStream(INPUT_STREAM_ID);
 
-            final Service<PingServiceHandler> svc = helios.addService(PingServiceHandler::new,
-                s2gAssociationLatch::countDown, () -> {},
-                embeddedInputStream, embeddedOutputStream);
+            final Service<PingServiceHandler> svc = helios.addService(PingServiceHandler::new, ipcInputStream,
+                s2gAssociationLatch::countDown, () -> {});
 
-            final int gatewayId = 1;
-            svc.handler().addOutputStream(gatewayId, embeddedOutputStream);// FIXME: define Helios Gateway-Service (HGS) protocol
+            final List<PingGatewayHandler> gatewayHandlers = new ArrayList<>();
+            for (int i = 0; i < NUM_GATEWAYS; i++)
+            {
+                final AeronStream ipcOutputStream = helios.newIpcStream(OUTPUT_STREAM_ID+i);
 
-            final Gateway<PingGatewayHandler> gw =
-                helios.addGateway(
-                    (outputBufferPool) -> new PingGatewayHandler(gatewayId,
-                        outputBufferPool, embeddedInputStream,
-                        (msgTypeId, buffer, index, length) -> {
-                            if (msgTypeId == MessageTypes.APPLICATION_MSG_ID)
-                            {
-                                // APPLICATION message type, ignore */
-                                assertTrue(buffer.getInt(index) == gatewayId);
-                                assertTrue(length == PingGatewayHandler.MESSAGE_LENGTH);
-                                pingLatch.countDown();
-                            }
-                            /*else
-                            {
-                                // ADMINISTRATIVE message type, ignore
-                            }*/
-                        })
-                );
-            gw.availableAssociationHandler(g2sAssociationLatch::countDown);
-            gw.addEndPoint(embeddedInputStream, embeddedOutputStream);
+                svc.addEndPoint(ipcOutputStream);
+
+                svc.handler().addOutputStream(i, ipcOutputStream); // FIXME: define Helios Gateway-Service (HGS) protocol
+
+                final Gateway<PingGatewayHandler> gw = helios.addGateway();
+                gw.availableAssociationHandler(g2sAssociationLatch::countDown);
+                final PingGatewayHandler gwHandler = gw.addEndPoint(ipcInputStream, ipcOutputStream,
+                    new PingGatewayHandlerFactory(i, ipcInputStream, new PingMessageHandler(i, pingLatch)));
+
+                gatewayHandlers.add(gwHandler);
+            }
 
             helios.start();
 
             s2gAssociationLatch.await();
             g2sAssociationLatch.await();
 
-            gw.handler().sendPing();
+            gatewayHandlers.forEach(PingGatewayHandler::sendPing);
 
             pingLatch.await();
         }
@@ -273,28 +318,29 @@ public class HeliosTest
             final CountDownLatch g2sAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
             final CountDownLatch pingLatch = new CountDownLatch(NUM_GATEWAYS);
 
-            final Service<PingServiceHandler> svc = helios.addService(PingServiceHandler::new,
+            final AeronStream svcInputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
+
+            final Service<PingServiceHandler> svc = helios.addService(PingServiceHandler::new, svcInputStream,
                 s2gAssociationLatch::countDown, () -> {});
 
-            final List<Gateway<PingGatewayHandler>> gateways = new ArrayList<>();
+            final List<PingGatewayHandler> gatewayHandlers = new ArrayList<>();
             for (int i = 0; i < NUM_GATEWAYS; i++)
             {
-                final AeronStream svcInputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID+i);
-                final AeronStream svcOutputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID+NUM_GATEWAYS+i);
+                final AeronStream svcOutputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID+i);
 
-                svc.addEndPoint(svcInputStream, svcOutputStream);
+                svc.addEndPoint(svcOutputStream);
 
                 svc.handler().addOutputStream(i, svcOutputStream); // FIXME: define Helios Gateway-Service (HGS) protocol
 
-                final AeronStream gwOutputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID+i);
-                final AeronStream gwInputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID+NUM_GATEWAYS+i);
+                final AeronStream gwInputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID+i);
+                final AeronStream gwOutputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
 
-                final Gateway<PingGatewayHandler> gw = helios.addGateway(
-                    new PingGatewayHandlerFactory(i, gwOutputStream, new PingMessageHandler(i, pingLatch)));
+                final Gateway<PingGatewayHandler> gw = helios.addGateway();
                 gw.availableAssociationHandler(g2sAssociationLatch::countDown);
-                gw.addEndPoint(gwOutputStream, gwInputStream);
+                final PingGatewayHandler pingHandler = gw.addEndPoint(gwOutputStream, gwInputStream,
+                    new PingGatewayHandlerFactory(i, gwOutputStream, new PingMessageHandler(i, pingLatch)));
 
-                gateways.add(gw);
+                gatewayHandlers.add(pingHandler);
             }
 
             helios.start();
@@ -302,73 +348,13 @@ public class HeliosTest
             s2gAssociationLatch.await();
             g2sAssociationLatch.await();
 
-            gateways.forEach((gw) -> gw.handler().sendPing());
+            gatewayHandlers.forEach(PingGatewayHandler::sendPing);
 
             pingLatch.await();
         }
 
         assertTrue(true);
     }
-
-    /*@Test
-    public void shouldPingOneEmbeddedServiceWithMultipleEmbeddedGateways() throws Exception
-    {
-        try(final Helios helios = new Helios())
-        {
-            final CountDownLatch s2gAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
-            final CountDownLatch g2sAssociationLatch = new CountDownLatch(NUM_GATEWAYS);
-            final CountDownLatch pingLatch = new CountDownLatch(NUM_GATEWAYS);
-
-            final AeronStream embeddedInputStream = helios.newEmbeddedStream(EMBEDDED_INPUT_STREAM_ID);
-
-            final Service<PingServiceHandler> svc = helios.addService(PingServiceHandler::new,
-                s2gAssociationLatch::countDown, () -> {});
-
-            final List<Gateway<PingGatewayHandler>> gateways = new ArrayList<>();
-            for (int i = 0; i < NUM_GATEWAYS; i++)
-            {
-                final AeronStream embeddedOutputStream = helios.newEmbeddedStream(EMBEDDED_OUTPUT_STREAM_ID+i);
-
-                svc.addEndPoint(embeddedInputStream, embeddedOutputStream);
-
-                final int gatewayId = i;
-                final Gateway<PingGatewayHandler> gw = helios.addGateway(
-                    (outputBufferPool) -> new PingGatewayHandler(outputBufferPool,
-                        (msgTypeId, buffer, index, length) -> {
-                            if (msgTypeId == MessageTypes.APPLICATION_MSG_ID)
-                            {
-                                System.out.println("PingGatewayHandler::onMessage buffer.getInt(index)=" + buffer.getInt(index) + " gatewayId=" + gatewayId);
-                                boolean b = buffer.getInt(index) == gatewayId;
-                                System.out.println("PingGatewayHandler::onMessage b=" + b);
-                                // APPLICATION message type, ignore
-                                assertTrue(buffer.getInt(index) == gatewayId);
-                                assertTrue(length == PingGatewayHandler.MESSAGE_LENGTH);
-                                pingLatch.countDown();
-                            }
-                            //else
-                            //{
-                                // ADMINISTRATIVE message type, ignore
-                            //}
-                        },
-                        gatewayId));
-                gw.availableAssociationHandler(g2sAssociationLatch::countDown);
-                gw.addEndPoint(embeddedInputStream, embeddedOutputStream);
-
-                gateways.add(gw);
-            }
-
-            helios.start();
-
-            s2gAssociationLatch.await();
-            g2sAssociationLatch.await();
-
-            gateways.forEach((gw) -> gw.handler().sendPing());
-
-            pingLatch.await();
-        }
-
-        assertTrue(true);
-    }*/
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenOnlyContextIsNull()
@@ -421,7 +407,7 @@ public class HeliosTest
     {
         try(final Helios helios = new Helios())
         {
-            helios.addService((outputBuffers) -> null).addEndPoint(null, helios.newStream(OUTPUT_CHANNEL, 0));
+            helios.addService((outputBuffers) -> null, null).addEndPoint(helios.newStream(OUTPUT_CHANNEL, 0));
 
         }
     }
@@ -431,7 +417,7 @@ public class HeliosTest
     {
         try(final Helios helios = new Helios())
         {
-            helios.addService((outputBuffers) -> null).addEndPoint(helios.newStream(INPUT_CHANNEL, 0), null);
+            helios.addService((outputBuffers) -> null, helios.newStream(INPUT_CHANNEL, 0)).addEndPoint(null);
         }
     }
 
@@ -440,7 +426,7 @@ public class HeliosTest
     {
         try(final Helios helios = new Helios())
         {
-            helios.addService(null);
+            helios.addService(null, helios.newStream(INPUT_CHANNEL, 0));
         }
     }
 
@@ -449,7 +435,7 @@ public class HeliosTest
     {
         try(final Helios helios = new Helios())
         {
-            helios.addGateway((outputBuffers) -> null).addEndPoint(null, helios.newStream(INPUT_CHANNEL, 0));
+            helios.addGateway().addEndPoint(null, helios.newStream(INPUT_CHANNEL, 0), (outputBuffers) -> null);
         }
     }
 
@@ -458,7 +444,7 @@ public class HeliosTest
     {
         try(final Helios helios = new Helios())
         {
-            helios.addGateway((outputBuffers) -> null).addEndPoint(helios.newStream(INPUT_CHANNEL, 0), null);
+            helios.addGateway().addEndPoint(helios.newStream(OUTPUT_CHANNEL, 0), null, (outputBuffers) -> null);
         }
     }
 
@@ -467,7 +453,7 @@ public class HeliosTest
     {
         try(final Helios helios = new Helios())
         {
-            helios.addGateway(null);
+            helios.addGateway().addEndPoint(helios.newStream(OUTPUT_CHANNEL, 0), helios.newStream(INPUT_CHANNEL, 0), null);
         }
     }
 
@@ -512,6 +498,7 @@ public class HeliosTest
         private final RingBufferPool ringBufferPool;
         private final IdleStrategy idleStrategy;
         private Int2ObjectHashMap<AeronStream> gatewayId2StreamMap; // FIXME: temporary workaround, use HGS protocol
+        private final DataMessage incomingDataMessage = new DataMessage();
 
         PingServiceHandler(final RingBufferPool ringBufferPool)
         {
@@ -530,7 +517,15 @@ public class HeliosTest
         {
             if (msgTypeId == MessageTypes.APPLICATION_MSG_ID)
             {
-                final int gatewayId = buffer.getInt(index); // FIXME: temporary workaround, use HGS protocol header
+                final DataDecoder dataDecoder = incomingDataMessage.wrap(buffer, index, length);
+                final ComponentDecoder componentDecoder = dataDecoder.mmbHeader().component();
+
+                final ComponentType componentType = componentDecoder.componentType();
+                assertTrue(componentType == ComponentType.Gateway);
+
+                final int gatewayId = componentDecoder.componentId();
+
+                //final int gatewayId = buffer.getInt(index); // FIXME: temporary workaround, use HGS protocol header
 
                 final AeronStream outputStream = gatewayId2StreamMap.get(gatewayId);
                 final RingBuffer outputBuffer = ringBufferPool.getOutputRingBuffer(outputStream);// FIXME: refactoring to avoid this API
@@ -562,7 +557,9 @@ public class HeliosTest
         private final AeronStream gwOutputStream;
         private final MessageHandler delegate;
         private final IdleStrategy idleStrategy;
-        private final UnsafeBuffer echoBuffer;
+        //private final UnsafeBuffer echoBuffer;
+        private final DataMessage outgoingDataMessage = new DataMessage();
+        private final DataMessage incomingDataMessage = new DataMessage();
 
         PingGatewayHandler(final int gatewayId, final RingBufferPool ringBufferPool, final AeronStream gwOutputStream,
             final MessageHandler delegate)
@@ -572,16 +569,22 @@ public class HeliosTest
             this.gwOutputStream = gwOutputStream;
             this.delegate = delegate;
             this.idleStrategy = new BusySpinIdleStrategy();
-            this.echoBuffer = new UnsafeBuffer(ByteBuffer.allocate(MESSAGE_LENGTH));
+            //this.echoBuffer = new UnsafeBuffer(ByteBuffer.allocate(MESSAGE_LENGTH));
+
+            outgoingDataMessage.allocate(ComponentType.Gateway, (short)gatewayId, MESSAGE_LENGTH);
         }
 
         void sendPing()
         {
             final RingBuffer outputBuffer = ringBufferPool.getOutputRingBuffer(gwOutputStream); // FIXME: refactoring to avoid this API
 
-            echoBuffer.putInt(0, gatewayId); // FIXME: temporary workaround, use HGS protocol header
+            //echoBuffer.putInt(0, gatewayId); // FIXME: temporary workaround, use HGS protocol header
+            final MutableDirectBuffer dataBuffer = outgoingDataMessage.dataBuffer();
+            final int dataBufferOffset = outgoingDataMessage.dataBufferOffset();
 
-            while (!outputBuffer.write(MessageTypes.APPLICATION_MSG_ID, echoBuffer, 0, MESSAGE_LENGTH))
+            dataBuffer.putInt(dataBufferOffset, gatewayId);
+
+            while (!outputBuffer.write(MessageTypes.APPLICATION_MSG_ID, dataBuffer, 0, dataBuffer.capacity()))
             {
                 idleStrategy.idle(0);
             }
@@ -590,7 +593,23 @@ public class HeliosTest
         @Override
         public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
         {
-            delegate.onMessage(msgTypeId, buffer, index, length);
+            if (msgTypeId == MessageTypes.APPLICATION_MSG_ID)
+            {
+                incomingDataMessage.wrap(buffer, index, length);
+
+                final MutableDirectBuffer dataBuffer = incomingDataMessage.dataBuffer();
+                final int dataBufferOffset = incomingDataMessage.dataBufferOffset();
+                final int dataBufferLength = incomingDataMessage.dataBufferLength();
+
+                //
+                delegate.onMessage(msgTypeId, dataBuffer, dataBufferOffset, dataBufferLength);
+            }
+            /*else
+            {
+                // ADMINISTRATIVE message type, ignore
+            }*/
+
+            //delegate.onMessage(msgTypeId, buffer, index, length);
         }
 
         @Override

@@ -1,51 +1,51 @@
 package org.helios.gateway;
 
-import org.helios.infra.InputMessageProcessor;
-import org.helios.infra.OutputMessageProcessor;
-import org.helios.infra.RateReport;
+import org.helios.infra.*;
 
-import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
-public final class GatewayReport implements RateReport
+public final class GatewayReport implements Report
 {
-    private final OutputMessageProcessor requestProcessor;
-    private final InputMessageProcessor responseProcessor;
+    private final List<InputReport> inputReportList;
+    private final List<OutputReport> outputReportList;
 
-    private long lastTimeStamp;
-    private long lastSuccessfulWrites;
-    private long lastBytesWritten;
-    private long lastSuccessfulReads;
-
-    public GatewayReport(final OutputMessageProcessor requestProcessor, final InputMessageProcessor responseProcessor)
+    public GatewayReport()
     {
-        this.requestProcessor = requestProcessor;
-        this.responseProcessor = responseProcessor;
+        inputReportList = new ArrayList<>();
+        outputReportList = new ArrayList<>();
+    }
 
-        lastTimeStamp = System.currentTimeMillis();
+    public void addRequestProcessor(final OutputMessageProcessor requestProcessor)
+    {
+        Objects.requireNonNull(requestProcessor, "requestProcessor");
+
+        outputReportList.add(requestProcessor);
+    }
+
+    public void addResponseProcessor(final InputMessageProcessor responseProcessor)
+    {
+        Objects.requireNonNull(responseProcessor, "responseProcessor");
+
+        inputReportList.add(responseProcessor);
     }
 
     @Override
-    public void print(final PrintStream stream)
+    public String name()
     {
-        final long timeStamp = System.currentTimeMillis();
-        long successfulWrites = requestProcessor.handler().successfulWrites();
-        long bytesWritten = requestProcessor.handler().bytesWritten();
-        long successfulReads = responseProcessor.successfulReads();
-        long failedReads = responseProcessor.failedReads();
+        return "GatewayReport";
+    }
 
-        final long duration = timeStamp - lastTimeStamp;
-        final long successfulWritesDelta = successfulWrites - lastSuccessfulWrites;
-        final long bytesTransferred = bytesWritten - lastBytesWritten;
-        final long successfulReadsDelta = successfulReads - lastSuccessfulReads;
+    @Override
+    public List<InputReport> inputReports()
+    {
+        return inputReportList;
+    }
 
-        final double failureRatio = failedReads / (double)(successfulReads + failedReads);
-
-        stream.format("GatewayReport: T %dms OUT %,d messages - %,d bytes - IN %,d messages [read failure ratio: %f]\n",
-            duration, successfulWritesDelta, bytesTransferred, successfulReadsDelta, failureRatio);
-
-        lastTimeStamp = timeStamp;
-        lastSuccessfulWrites = successfulWrites;
-        lastBytesWritten = bytesWritten;
-        lastSuccessfulReads = successfulReads;
+    @Override
+    public List<OutputReport> outputReports()
+    {
+        return outputReportList;
     }
 }

@@ -6,12 +6,15 @@ import org.agrona.console.ContinueBarrier;
 import org.helios.AeronStream;
 import org.helios.Helios;
 import org.helios.HeliosContext;
+import org.helios.HeliosDriver;
 import org.helios.gateway.Gateway;
-import org.helios.infra.RateReport;
+import org.helios.infra.ConsoleReporter;
+import org.helios.infra.Report;
+import org.helios.util.ShutdownHelper;
 
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static java.lang.System.nanoTime;
 
@@ -32,11 +35,12 @@ public class EchoGateway
 
     public static void main(String[] args) throws Exception
     {
-        System.out.print("Starting Helios service...");
+        System.out.print("Starting Helios...");
 
         final HeliosContext context = new HeliosContext();
+        final HeliosDriver driver = new HeliosDriver(context, "./.aeronGateway");
 
-        try(final Helios helios = new Helios(context))
+        try(final Helios helios = new Helios(context, driver))
         {
             helios.errorHandler(EchoGateway::serviceError);
 
@@ -44,34 +48,37 @@ public class EchoGateway
 
             final AeronStream inputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream outputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            final Gateway<EchoGatewayHandler> gw = helios.addGateway(EchoGatewayHandler::new,
-                EchoGateway::serviceAssociationEstablished, EchoGateway::serviceAssociationBroken,
-                outputStream, inputStream);
+            final Gateway<EchoGatewayHandler> gw = helios.addGateway(
+                EchoGateway::serviceAssociationEstablished, EchoGateway::serviceAssociationBroken);
+            final EchoGatewayHandler gwHandler = gw.addEndPoint(outputStream, inputStream, EchoGatewayHandler::new);
+
+            final ConsoleReporter reporter = new ConsoleReporter();
+
+            ShutdownHelper.register(() -> reporter.onReport(gw.report()));
 
             helios.start();
 
-            System.out.print("Waiting for association with EchoService...");
+            System.out.print("done\nEchoGateway is now running\nWaiting for association with EchoService...");
 
             ASSOCIATION_LATCH.await();
 
-            System.out.println("done\nEchoGateway is now running.");
+            System.out.println("done");
 
-            runTest(gw);
+            runTest(gwHandler, () -> reporter.onReport(gw.report()));
 
-            System.out.println("EchoGateway is now terminated.");
+            reporter.onReport(gw.report());
         }
+
+        System.out.println("EchoGateway is now terminated");
     }
 
-    static void runTest(final Gateway<EchoGatewayHandler> gw)
+    static void runTest(final EchoGatewayHandler gwHandler, final Runnable reportRunnable)
     {
-        final EchoGatewayHandler proxy = gw.handler();
-        final List<RateReport> reportList = gw.reportList();
-
         System.out.println("Warming up... " + WARMUP_NUMBER_OF_ITERATIONS + " iterations of " + WARMUP_NUMBER_OF_MESSAGES + " messages");
 
         for (int i = 0; i < WARMUP_NUMBER_OF_ITERATIONS; i++)
         {
-            runIterations(proxy, WARMUP_NUMBER_OF_MESSAGES);
+            runIterations(gwHandler, WARMUP_NUMBER_OF_MESSAGES);
         }
 
         final ContinueBarrier barrier = new ContinueBarrier("Execute again?");
@@ -85,7 +92,7 @@ public class EchoGateway
 
             System.out.println("Echoing " + NUMBER_OF_MESSAGES + " messages");
 
-            final long elapsedTime = runIterations(proxy, NUMBER_OF_MESSAGES);
+            final long elapsedTime = runIterations(gwHandler, NUMBER_OF_MESSAGES);
 
             System.out.println(
                 String.format("%d iteration, %d ops, %d ns, %d ms, rate %.02g ops/s",
@@ -95,7 +102,7 @@ public class EchoGateway
                     TimeUnit.NANOSECONDS.toMillis(elapsedTime),
                     ((double)NUMBER_OF_MESSAGES / (double)elapsedTime) * 1_000_000_000));
 
-            reportList.forEach(report -> report.print(System.out));
+            reportRunnable.run();
 
             if (NUMBER_OF_ITERATIONS <= 0)
             {
@@ -114,18 +121,18 @@ public class EchoGateway
         {
             try
             {
-                //final long echoTimestampSent = System.nanoTime();
+                final long echoTimestampSent = System.nanoTime();
 
-                gatewayHandler.sendEcho(i);
+                gatewayHandler.sendEcho(echoTimestampSent);//i
 
                 /*long echoTimestampReceived;
                 do
                 {
                     echoTimestampReceived = gatewayHandler.getTimestamp();
                 }
-                while (echoTimestampReceived != echoTimestampSent);
+                while (echoTimestampReceived != echoTimestampSent);*/
 
-                final long echoRttNs = System.nanoTime() - echoTimestampReceived;
+                /*final long echoRttNs = System.nanoTime() - echoTimestampReceived;
 
                 HISTOGRAM.recordValue(echoRttNs);*/
             }

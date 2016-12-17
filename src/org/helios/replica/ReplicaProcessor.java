@@ -25,6 +25,12 @@ public class ReplicaProcessor implements Processor
     }
 
     @Override
+    public String name()
+    {
+        return replicatorThread.getName();
+    }
+
+    @Override
     public void start()
     {
         running.set(true);

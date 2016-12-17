@@ -1,55 +1,49 @@
 package org.helios.service;
 
-import org.helios.infra.InputMessageProcessor;
-import org.helios.infra.OutputMessageProcessor;
-import org.helios.infra.RateReport;
+import org.helios.infra.*;
 
 import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
-public final class ServiceReport implements RateReport
+public final class ServiceReport implements Report
 {
-    private final InputMessageProcessor requestProcessor;
-    private final OutputMessageProcessor responseProcessor;
+    private final List<InputReport> inputReportList;
+    private final List<OutputReport> outputReportList;
 
-    private long lastTimeStamp;
-    private long lastSuccessfulReads;
-    private long lastSuccessfulWrites;
-    private long lastBytesWritten;
-
-    public ServiceReport(final InputMessageProcessor requestProcessor, final OutputMessageProcessor responseProcessor)
+    public ServiceReport(final InputMessageProcessor requestProcessor)
     {
         Objects.requireNonNull(requestProcessor, "requestProcessor");
+
+        inputReportList = new ArrayList<>();
+        outputReportList = new ArrayList<>();
+
+        inputReportList.add(requestProcessor);
+    }
+
+    public void addResponseProcessor(final OutputMessageProcessor responseProcessor)
+    {
         Objects.requireNonNull(responseProcessor, "responseProcessor");
 
-        this.requestProcessor = requestProcessor;
-        this.responseProcessor = responseProcessor;
-
-        lastTimeStamp = System.currentTimeMillis();
+        outputReportList.add(responseProcessor);
     }
 
     @Override
-    public void print(final PrintStream stream)
+    public String name()
     {
-        final long timeStamp = System.currentTimeMillis();
-        long successfulReads = requestProcessor.successfulReads();
-        long successfulWrites = responseProcessor.handler().successfulWrites();
-        long bytesWritten = responseProcessor.handler().bytesWritten();
-        long failedReads = requestProcessor.failedReads();
+        return "ServiceReport";
+    }
 
-        final long duration = timeStamp - lastTimeStamp;
-        final long successfulReadsDelta = successfulReads - lastSuccessfulReads;
-        final long successfulWritesDelta = successfulWrites - lastSuccessfulWrites;
-        final long bytesTransferred = bytesWritten - lastBytesWritten;
+    @Override
+    public List<InputReport> inputReports()
+    {
+        return inputReportList;
+    }
 
-        final double failureRatio = failedReads / (double)(successfulReads + failedReads);
-
-        stream.format("ServiceReport: T %dms IN %,d messages - OUT %,d messages - %,d bytes [read failure ratio: %f]\n",
-            duration, successfulReadsDelta, successfulWritesDelta, bytesTransferred, failureRatio);
-
-        lastTimeStamp = timeStamp;
-        lastSuccessfulReads = successfulReads;
-        lastSuccessfulWrites = successfulWrites;
-        lastBytesWritten = bytesWritten;
+    @Override
+    public List<OutputReport> outputReports()
+    {
+        return outputReportList;
     }
 }

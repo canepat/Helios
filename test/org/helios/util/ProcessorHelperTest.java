@@ -37,6 +37,12 @@ public class ProcessorHelperTest
         }
 
         @Override
+        public String name()
+        {
+            return this.toString();
+        }
+
+        @Override
         public void start()
         {
             runnableCode.run();

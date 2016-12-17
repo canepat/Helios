@@ -2,11 +2,11 @@ package org.helios;
 
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.YieldingWaitStrategy;
+import org.agrona.LangUtil;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.SleepingIdleStrategy;
 import org.helios.journal.Journalling;
 import org.helios.journal.strategy.PositionalJournalling;
-import org.agrona.LangUtil;
-import org.agrona.concurrent.BackoffIdleStrategy;
-import org.agrona.concurrent.IdleStrategy;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -48,6 +48,9 @@ public class HeliosConfiguration
     public static final long MAX_YIELDS = getLong("helios.core.back_off.idle.strategy.max_yields", 10);
     public static final long MIN_PARK_NS = getLong("helios.core.back_off.idle.strategy.min_park_ns", 1000);
     public static final long MAX_PARK_NS = getLong("helios.core.back_off.idle.strategy.max_park_ns", 100000);
+
+    public static final int HEARTBEAT_INTERVAL_MS = getInteger("helios.mmb.heartbeat_interval", 1000000); //1000
+    public static final int HEARTBEAT_LIVENESS = getInteger("helios.mmb.heartbeat_liveness", 3);
 
     public static Journalling journalStrategy()
     {
@@ -117,7 +120,8 @@ public class HeliosConfiguration
 
         if (strategyClassName == null)
         {
-            idleStrategy = new BackoffIdleStrategy(MAX_SPINS, MAX_YIELDS, MIN_PARK_NS, MAX_PARK_NS);
+            //idleStrategy = new BackoffIdleStrategy(MAX_SPINS, MAX_YIELDS, MIN_PARK_NS, MAX_PARK_NS);
+            idleStrategy = new SleepingIdleStrategy(MAX_PARK_NS);
         }
         else
         {

@@ -2,6 +2,7 @@ package org.helios;
 
 import io.aeron.Aeron;
 import io.aeron.Image;
+import org.helios.mmb.sbe.ComponentType;
 
 import java.util.Objects;
 
@@ -24,20 +25,15 @@ public class AeronStream
     public final Aeron aeron;
     public final String channel;
     public final int streamId;
+    public ComponentType componentType;
+    public short componentId;
 
     private final String key;
 
     @Override
     public boolean equals(Object obj)
     {
-        if (obj != null && obj instanceof AeronStream)
-        {
-            return ((AeronStream)obj).key.equals(key);
-        }
-        else
-        {
-            return false;
-        }
+        return obj != null && obj instanceof AeronStream && ((AeronStream) obj).key.equals(key);
     }
 
     @Override

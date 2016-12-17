@@ -15,6 +15,7 @@ import org.helios.journal.JournalHandler;
 import org.helios.journal.JournalProcessor;
 import org.helios.journal.JournalWriter;
 import org.helios.journal.Journalling;
+import org.helios.mmb.sbe.ComponentType;
 import org.helios.replica.ReplicaHandler;
 import org.helios.replica.ReplicaProcessor;
 import org.helios.service.Service;
@@ -44,16 +45,18 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
 
     private final long TICK_DURATION_NS = TimeUnit.MICROSECONDS.toNanos(100);  // TODO: configure
     private final int TICKS_PER_WHEEL = 512; // TODO: configure
+    private static short nextServiceId = 0;
 
+    private final short serviceId;
     private final Helios helios;
-    private final InputMessageProcessor gwRequestProcessor;
+    private final InputMessageProcessor svcInputProcessor;
     private final RingBufferPool ringBufferPool;
     private final List<OutputMessageProcessor> gwResponseProcessorList;
     private final JournalProcessor journalProcessor;
     private final ReplicaProcessor replicaProcessor;
     private final RingBufferProcessor<T> serviceProcessor;
     private final List<OutputMessageProcessor> eventProcessorList;
-    private final List<RateReport> reportList;
+    private final ServiceReport report;
     private final TimerWheel timerWheel;
     private final SnapshotTimer snapshotTimer;
     private final AtomicBoolean timerWheelRunning;
@@ -61,14 +64,14 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
     private AvailableAssociationHandler availableAssociationHandler;
     private UnavailableAssociationHandler unavailableAssociationHandler;
 
-    public HeliosService(final Helios helios, final ServiceHandlerFactory<T> factory)
+    public HeliosService(final Helios helios, final ServiceHandlerFactory<T> factory, final AeronStream reqStream)
     {
         this.helios = helios;
 
+        serviceId = ++nextServiceId;
         ringBufferPool = new RingBufferPool();
         gwResponseProcessorList = new ArrayList<>();
         eventProcessorList = new ArrayList<>();
-        reportList = new ArrayList<>();
 
         final HeliosContext context = helios.context();
 
@@ -127,19 +130,25 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
         final T serviceHandler = factory.createServiceHandler(ringBufferPool);
         serviceProcessor = new RingBufferProcessor<>(
             isJournalEnabled ? journalRingBuffer : (isReplicaEnabled ? replicaRingBuffer : inputRingBuffer),
-            serviceHandler, new BusySpinIdleStrategy(), "serviceProcessor");
+            serviceHandler, new BusySpinIdleStrategy(), "svcProcessor");
 
         final IdleStrategy pollIdleStrategy = context.subscriberIdleStrategy();
-        gwRequestProcessor = new InputMessageProcessor(inputRingBuffer, pollIdleStrategy, FRAME_COUNT_LIMIT, "gwRequestProcessor");
+        final int heartbeatLiveness = context.heartbeatLiveness();
+        svcInputProcessor = new InputMessageProcessor(inputRingBuffer, pollIdleStrategy, FRAME_COUNT_LIMIT,
+            heartbeatLiveness, reqStream, this, "svcInputProcessor");
+
+        final long subscriptionId = svcInputProcessor.subscriptionId();
+        helios.addServiceSubscription(subscriptionId, this);
+
+        report = new ServiceReport(svcInputProcessor);
     }
 
-    public Service<T> addEndPoint(final AeronStream reqStream, final AeronStream rspStream)
+    public Service<T> addEndPoint(final AeronStream rspStream)
     {
-        Objects.requireNonNull(reqStream, "reqStream");
         Objects.requireNonNull(rspStream, "rspStream");
 
-        final long subscriptionId = gwRequestProcessor.addSubscription(reqStream);
-        helios.addServiceSubscription(subscriptionId, this);
+        rspStream.componentType = ComponentType.Service;
+        rspStream.componentId = serviceId;
 
         final IdleStrategy writeIdleStrategy = helios.context().writeIdleStrategy();
 
@@ -148,14 +157,13 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
 
         ringBufferPool.addOutputRingBuffer(rspStream, outputRingBuffer);
 
-        final OutputMessageProcessor gwResponseProcessor =
-            new OutputMessageProcessor(outputRingBuffer, rspStream, writeIdleStrategy, "gwResponseProcessor"); // FIXME: gwResponseProcessor name
+        final int heartbeatInterval = helios.context().heartbeatInterval();
+        final OutputMessageProcessor svcOutputProcessor =
+            new OutputMessageProcessor(outputRingBuffer, rspStream, writeIdleStrategy, heartbeatInterval, "svcOutputProcessor"); // FIXME: gwResponseProcessor name
 
-        gwResponseProcessorList.add(gwResponseProcessor);
+        gwResponseProcessorList.add(svcOutputProcessor);
 
-        final long publicationId = gwResponseProcessor.handler().outputPublicationId();
-
-        reportList.add(new ServiceReport(gwRequestProcessor, gwResponseProcessor));
+        report.addResponseProcessor(svcOutputProcessor);
 
         return this;
     }
@@ -165,6 +173,9 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
     {
         Objects.requireNonNull(eventStream, "eventStream");
 
+        eventStream.componentType = ComponentType.Service;
+        eventStream.componentId = serviceId;
+
         final IdleStrategy writeIdleStrategy = helios.context().writeIdleStrategy();
 
         final ByteBuffer eventBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
@@ -172,8 +183,9 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
 
         ringBufferPool.addEventRingBuffer(eventStream, eventRingBuffer);
 
+        final int heartbeatInterval = helios.context().heartbeatInterval();
         final OutputMessageProcessor eventProcessor =
-            new OutputMessageProcessor(eventRingBuffer, eventStream, writeIdleStrategy, "eventProcessor"); // FIXME: eventProcessor name
+            new OutputMessageProcessor(eventRingBuffer, eventStream, writeIdleStrategy, heartbeatInterval, "eventProcessor"); // FIXME: eventProcessor name
 
         eventProcessorList.add(eventProcessor);
 
@@ -181,9 +193,9 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
     }
 
     @Override
-    public List<RateReport> reportList()
+    public Report report()
     {
-        return reportList;
+        return report;
     }
 
     @Override
@@ -200,7 +212,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
         ProcessorHelper.start(journalProcessor);
         eventProcessorList.forEach(ProcessorHelper::start);
         gwResponseProcessorList.forEach(ProcessorHelper::start);
-        ProcessorHelper.start(gwRequestProcessor);
+        ProcessorHelper.start(svcInputProcessor);
 
         timerExecutor.execute(() -> {
             while (timerWheelRunning.get()) {
@@ -227,17 +239,13 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
     @Override
     public void onAvailableImage(final Image image)
     {
-        gwRequestProcessor.onAvailableImage(image);
-
-        onAssociationEstablished();
+        svcInputProcessor.onAvailableImage(image);
     }
 
     @Override
     public void onUnavailableImage(final Image image)
     {
-        gwRequestProcessor.onUnavailableImage(image);
-
-        onAssociationBroken();
+        svcInputProcessor.onUnavailableImage(image);
     }
 
     @Override
@@ -265,7 +273,7 @@ public class HeliosService<T extends ServiceHandler> implements Service<T>, Asso
         timerWheelRunning.set(false);
         timerExecutor.shutdown();
 
-        CloseHelper.quietClose(gwRequestProcessor);
+        CloseHelper.quietClose(svcInputProcessor);
         gwResponseProcessorList.forEach(CloseHelper::quietClose);
         eventProcessorList.forEach(CloseHelper::quietClose);
         CloseHelper.quietClose(journalProcessor);

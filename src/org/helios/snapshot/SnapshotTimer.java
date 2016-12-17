@@ -4,6 +4,7 @@ import org.agrona.TimerWheel;
 import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.helios.mmb.SnapshotMessage;
 import org.helios.util.Check;
 
 import java.util.Objects;
@@ -14,6 +15,7 @@ public final class SnapshotTimer implements Runnable, AutoCloseable
     public static final long MAX_SNAPSHOT_PERIOD = TimeUnit.HOURS.toMillis(24);
     public static final long DEFAULT_SNAPSHOT_PERIOD = TimeUnit.HOURS.toMillis(24);
 
+    private final SnapshotMessage snapshotMessage;
     private final TimerWheel timerWheel;
     private final RingBuffer inputRingBuffer;
     private final long snapshotPeriod;
@@ -36,6 +38,8 @@ public final class SnapshotTimer implements Runnable, AutoCloseable
         this.timerWheel = timerWheel;
         this.inputRingBuffer = inputRingBuffer;
         this.snapshotPeriod = snapshotPeriod;
+
+        snapshotMessage = new SnapshotMessage();
     }
 
     public void start()
@@ -47,8 +51,8 @@ public final class SnapshotTimer implements Runnable, AutoCloseable
     @Override
     public void run()
     {
-        // Write the Save Data Snapshot message into the input pipeline.
-        Snapshot.writeSaveMessage(inputRingBuffer, idleStrategy);
+        // Write the Save Data SnapshotMessage message into the input pipeline.
+        snapshotMessage.writeSaveMessage(inputRingBuffer, idleStrategy);
 
         // Schedule the next data snapshot after periodic time interval.
         timerWheel.rescheduleTimeout(snapshotPeriod, TimeUnit.MILLISECONDS, timer);

@@ -31,9 +31,9 @@
 
     <types>
         <composite name="Component" description="MMB message identifiers">
-            <enum name="ComponentType" encodingType="char">
-                <validValue name="Service">S</validValue>
-                <validValue name="Gateway">G</validValue>
+            <enum name="ComponentType" encodingType="uint8">
+                <validValue name="Service">0</validValue>
+                <validValue name="Gateway">1</validValue>
             </enum>
             <type name="componentId" primitiveType="uint8"/>
         </composite>
@@ -45,24 +45,32 @@
         </composite>
     </types>
 
-    <sbe:message name="Acknowledge" id="0" description="Shutdown message">
+    <sbe:message name="Acknowledge" id="0" description="Acknowledge message">
         <field name="mmbHeader" id="1" type="MMBHeaderType" description="MMB header" offset="0"/>
         <field name="isACK" id="2" type="Boolean" description="ACK/NACK flag"/>
     </sbe:message>
 
-    <sbe:message name="Shutdown" id="1" description="Shutdown message">
+    <sbe:message name="Startup" id="1" description="Startup message">
         <field name="mmbHeader" id="1" type="MMBHeaderType" description="MMB header" offset="0"/>
     </sbe:message>
 
-    <sbe:message name="Heartbeat" id="2" description="Heartbeat message">
+    <sbe:message name="Shutdown" id="2" description="Shutdown message">
         <field name="mmbHeader" id="1" type="MMBHeaderType" description="MMB header" offset="0"/>
     </sbe:message>
 
-    <sbe:message name="SaveSnapshot" id="3" description="Save snapshot message">
+    <sbe:message name="Heartbeat" id="3" description="Heartbeat message">
         <field name="mmbHeader" id="1" type="MMBHeaderType" description="MMB header" offset="0"/>
     </sbe:message>
 
-    <sbe:message name="LoadSnapshot" id="4" description="Load snapshot message">
+    <sbe:message name="SaveSnapshot" id="4" description="Save snapshot message">
+        <field name="mmbHeader" id="1" type="MMBHeaderType" description="MMB header" offset="0"/>
+    </sbe:message>
+
+    <sbe:message name="LoadSnapshot" id="5" description="Load snapshot message">
+        <field name="mmbHeader" id="1" type="MMBHeaderType" description="MMB header" offset="0"/>
+    </sbe:message>
+
+    <sbe:message name="Data" id="6" description="Data message">
         <field name="mmbHeader" id="1" type="MMBHeaderType" description="MMB header" offset="0"/>
     </sbe:message>
 </sbe:messageSchema>

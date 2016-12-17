@@ -3,6 +3,8 @@ package echo;
 import org.helios.AeronStream;
 import org.helios.Helios;
 import org.helios.HeliosContext;
+import org.helios.HeliosDriver;
+import org.helios.infra.ConsoleReporter;
 import org.helios.service.Service;
 import org.helios.util.ShutdownHelper;
 
@@ -17,34 +19,37 @@ public class EchoService
 
     public static void main(String[] args) throws Exception
     {
-        System.out.print("Starting Helios service...");
+        System.out.print("Starting Helios...");
 
         final HeliosContext context = new HeliosContext()
             .setJournalEnabled(true);
+        final HeliosDriver driver = new HeliosDriver(context, "./.aeronService");
 
-        try(final Helios helios = new Helios(context))
+        try(final Helios helios = new Helios(context, driver))
         {
             System.out.print("done\nCreating Helios service...");
 
             final AeronStream inputStream = helios.newStream(INPUT_CHANNEL, INPUT_STREAM_ID);
             final AeronStream outputStream = helios.newStream(OUTPUT_CHANNEL, OUTPUT_STREAM_ID);
-            final Service<EchoServiceHandler> echoService = helios.addService(
+            final Service<EchoServiceHandler> svc = helios.addService(
                 EchoServiceHandler::new, inputStream, outputStream);
 
-            final EchoServiceHandler echoServiceHandler = echoService.handler();
+            final EchoServiceHandler echoServiceHandler = svc.handler();
 
             final CountDownLatch runningLatch = new CountDownLatch(1);
             ShutdownHelper.register(runningLatch::countDown);
 
-            System.out.println("done\nEchoService is now running.");
-
             helios.start();
+
+            System.out.println("done\nEchoService is now running");
 
             runningLatch.await();
 
             System.out.println("EchoService last snapshot: " + echoServiceHandler.lastSnapshotTimestamp());
+
+            new ConsoleReporter().onReport(svc.report());
         }
 
-        System.out.println("EchoService is now terminated.");
+        System.out.println("EchoService is now terminated");
     }
 }

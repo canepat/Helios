@@ -1,12 +1,15 @@
 package org.helios.infra;
 
 import io.aeron.Publication;
+import io.aeron.logbuffer.BufferClaim;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.MessageHandler;
 import org.helios.AeronStream;
+import org.helios.mmb.sbe.MessageHeaderDecoder;
+import org.helios.mmb.sbe.ShutdownDecoder;
 
 import static org.agrona.UnsafeAccess.UNSAFE;
 
@@ -22,25 +25,38 @@ public class OutputMessageHandler implements MessageHandler, AutoCloseable
 
     private final Publication outputPublication;
     private final IdleStrategy idleStrategy;
+    private final BufferClaim bufferClaim;
 
-    public OutputMessageHandler(final AeronStream outputStream, final IdleStrategy idleStrategy)
+    OutputMessageHandler(final AeronStream outputStream, final IdleStrategy idleStrategy)
     {
         this.idleStrategy = idleStrategy;
 
         outputPublication = outputStream.aeron.addPublication(outputStream.channel, outputStream.streamId);
-    }
 
+        bufferClaim = new BufferClaim();
+    }
+    private MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
     @Override
     public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
     {
         try
         {
-            while (outputPublication.offer(buffer, index, length) < 0L)
+            messageHeaderDecoder.wrap(buffer, index);
+            if (messageHeaderDecoder.templateId() == ShutdownDecoder.TEMPLATE_ID)
+            {
+                System.out.println("ShutdownDecoder.TEMPLATE_ID matched!");
+            }
+
+            while (outputPublication.tryClaim(length, bufferClaim) <= 0)
             {
                 UNSAFE.putOrderedLong(this, FAILED_WRITES_OFFSET, failedWrites + 1);
 
                 idleStrategy.idle(0);
             }
+
+            final int offset = bufferClaim.offset();
+            bufferClaim.buffer().putBytes(offset, buffer, index, length);
+            bufferClaim.commit();
 
             UNSAFE.putOrderedLong(this, SUCCESSFUL_WRITES_OFFSET, successfulWrites + 1);
             UNSAFE.putOrderedLong(this, BYTES_WRITTEN_OFFSET, bytesWritten + length);
@@ -62,17 +78,17 @@ public class OutputMessageHandler implements MessageHandler, AutoCloseable
         return this.outputPublication.registrationId();
     }
 
-    public long successfulWrites()
+    long successfulWrites()
     {
         return successfulWrites;
     }
 
-    public long failedWrites()
+    long failedWrites()
     {
         return failedWrites;
     }
 
-    public long bytesWritten()
+    long bytesWritten()
     {
         return bytesWritten;
     }

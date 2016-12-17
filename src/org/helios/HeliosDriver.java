@@ -16,8 +16,14 @@ public class HeliosDriver implements Closeable
 
     public HeliosDriver(final HeliosContext context)
     {
+        this(context, AERON_DIR_NAME_DEFAULT);
+    }
+
+    public HeliosDriver(final HeliosContext context, final String aeronDirectoryName)
+    {
         this(context, new MediaDriver.Context()
-            .aeronDirectoryName(AERON_DIR_NAME_DEFAULT)
+            .aeronDirectoryName(aeronDirectoryName)
+            .termBufferSparseFile(false)
             .threadingMode(ThreadingMode.SHARED)
             .conductorIdleStrategy(new BackoffIdleStrategy(1, 1, 1, 1))
             .receiverIdleStrategy(new NoOpIdleStrategy())

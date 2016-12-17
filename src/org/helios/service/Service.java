@@ -2,14 +2,12 @@ package org.helios.service;
 
 import org.helios.AeronStream;
 import org.helios.infra.AvailableAssociationHandler;
-import org.helios.infra.RateReport;
+import org.helios.infra.Report;
 import org.helios.infra.UnavailableAssociationHandler;
-
-import java.util.List;
 
 public interface Service<T extends ServiceHandler> extends AutoCloseable
 {
-    Service<T> addEndPoint(final AeronStream reqStream, final AeronStream rspStream);
+    Service<T> addEndPoint(final AeronStream rspStream);
 
     Service<T> addEventChannel(final AeronStream eventStream);
 
@@ -17,7 +15,7 @@ public interface Service<T extends ServiceHandler> extends AutoCloseable
 
     Service<T> unavailableAssociationHandler(final UnavailableAssociationHandler handler);
 
-    List<RateReport> reportList();
+    Report report();
 
     T handler();
 

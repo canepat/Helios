@@ -6,8 +6,6 @@ import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import static org.agrona.UnsafeAccess.UNSAFE;
 
 public class RingBufferProcessor<T extends MessageHandler & AutoCloseable> implements Processor, MessageHandler
@@ -21,7 +19,7 @@ public class RingBufferProcessor<T extends MessageHandler & AutoCloseable> imple
     private final RingBuffer ringBuffer;
     private final IdleStrategy idleStrategy;
     private final T handler;
-    private final AtomicBoolean running;
+    private volatile boolean running;
     private final Thread processorThread;
 
     public RingBufferProcessor(final RingBuffer ringBuffer, final T handler, final IdleStrategy idleStrategy, final String threadName)
@@ -30,21 +28,27 @@ public class RingBufferProcessor<T extends MessageHandler & AutoCloseable> imple
         this.handler = handler;
         this.idleStrategy = idleStrategy;
 
-        running = new AtomicBoolean(false);
+        running = false;
         processorThread = new Thread(this, threadName);
+    }
+
+    @Override
+    public String name()
+    {
+        return processorThread.getName();
     }
 
     @Override
     public void start()
     {
-        running.set(true);
+        running = true;
         processorThread.start();
     }
 
     @Override
     public void run()
     {
-        while (running.get())
+        while (running)
         {
             final int readCount = ringBuffer.read(this);
             if (0 == readCount)
@@ -68,7 +72,7 @@ public class RingBufferProcessor<T extends MessageHandler & AutoCloseable> imple
     @Override
     public void close() throws Exception
     {
-        running.set(false);
+        running = false;
         processorThread.join();
 
         CloseHelper.close(handler);

@@ -14,6 +14,7 @@ import org.helios.gateway.GatewayHandler;
 import org.helios.gateway.GatewayHandlerFactory;
 import org.helios.gateway.GatewayReport;
 import org.helios.infra.*;
+import org.helios.mmb.sbe.ComponentType;
 import org.helios.util.DirectBufferAllocator;
 import org.helios.util.ProcessorHelper;
 import org.helios.util.RingBufferPool;
@@ -25,45 +26,46 @@ import java.util.Objects;
 
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
-public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, AssociationHandler,
+class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, AssociationHandler,
     AvailableImageHandler, UnavailableImageHandler
 {
     private static final int FRAME_COUNT_LIMIT = Integer.getInteger("helios.gateway.poll.frame_count_limit", 10); // TODO: from HeliosContext
+    private static short nextGatewayId = 0;
 
+    private final short gatewayId;
     private final Helios helios;
-    private final InputMessageProcessor svcResponseProcessor;
     private final RingBufferPool ringBufferPool;
-    private final List<OutputMessageProcessor> svcRequestProcessorList;
-    private final RingBufferProcessor<T> gatewayProcessor;
+    private final List<OutputMessageProcessor> gwOutputProcessorList;
+    private final List<InputMessageProcessor> gwInputProcessorList;
+    private final List<RingBufferProcessor> gatewayProcessorList;
     private final List<InputMessageProcessor> eventProcessorList;
-    private final List<RateReport> reportList;
+    private final GatewayReport report;
     private AvailableAssociationHandler availableAssociationHandler;
     private UnavailableAssociationHandler unavailableAssociationHandler;
 
-    public HeliosGateway(final Helios helios, final GatewayHandlerFactory<T> factory)
+    HeliosGateway(final Helios helios)
     {
         this.helios = helios;
 
+        gatewayId = ++nextGatewayId;
         ringBufferPool = new RingBufferPool();
-        svcRequestProcessorList = new ArrayList<>();
+        gwOutputProcessorList = new ArrayList<>();
+        gwInputProcessorList = new ArrayList<>();
+        gatewayProcessorList = new ArrayList<>();
         eventProcessorList = new ArrayList<>();
-        reportList = new ArrayList<>();
 
-        final ByteBuffer inputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
-        final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
-
-        final T gatewayHandler = factory.createGatewayHandler(ringBufferPool);
-        gatewayProcessor = new RingBufferProcessor<>(inputRingBuffer, gatewayHandler, new BusySpinIdleStrategy(), "gwProcessor");
-
-        final IdleStrategy pollIdleStrategy = helios.context().subscriberIdleStrategy();
-        svcResponseProcessor = new InputMessageProcessor(inputRingBuffer, pollIdleStrategy, FRAME_COUNT_LIMIT, "svcResponseProcessor");
+        report = new GatewayReport();
     }
 
     @Override
-    public Gateway<T> addEndPoint(final AeronStream reqStream, final AeronStream rspStream)
+    public T addEndPoint(final AeronStream reqStream, final AeronStream rspStream, final GatewayHandlerFactory<T> factory)
     {
         Objects.requireNonNull(reqStream, "reqStream");
         Objects.requireNonNull(rspStream, "rspStream");
+        Objects.requireNonNull(factory, "factory");
+
+        reqStream.componentType = ComponentType.Gateway;
+        reqStream.componentId = gatewayId;
 
         final IdleStrategy idleStrategy = new BusySpinIdleStrategy();
 
@@ -72,17 +74,34 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
 
         ringBufferPool.addOutputRingBuffer(reqStream, outputRingBuffer);
 
-        final OutputMessageProcessor svcRequestProcessor =
-            new OutputMessageProcessor(outputRingBuffer, reqStream, idleStrategy, "svcRequestProcessor");
+        final int heartbeatInterval = helios.context().heartbeatInterval();
+        final OutputMessageProcessor gwOutputProcessor =
+            new OutputMessageProcessor(outputRingBuffer, reqStream, idleStrategy, heartbeatInterval, "gwOutputProcessor");
 
-        svcRequestProcessorList.add(svcRequestProcessor);
+        gwOutputProcessorList.add(gwOutputProcessor);
 
-        final long subscriptionId = svcResponseProcessor.addSubscription(rspStream);
+        final ByteBuffer inputBuffer = DirectBufferAllocator.allocateCacheAligned((16 * 1024) + TRAILER_LENGTH); // TODO: configure
+        final RingBuffer inputRingBuffer = new OneToOneRingBuffer(new UnsafeBuffer(inputBuffer));
+
+        final T gatewayHandler = factory.createGatewayHandler(ringBufferPool);
+        final RingBufferProcessor gatewayProcessor = new RingBufferProcessor<>(inputRingBuffer, gatewayHandler, new BusySpinIdleStrategy(), "gwProcessor");
+        gatewayProcessorList.add(gatewayProcessor);
+
+        final IdleStrategy pollIdleStrategy = helios.context().subscriberIdleStrategy();
+        final int heartbeatLiveness = helios.context().heartbeatLiveness();
+        final InputMessageProcessor gwInputProcessor =
+            new InputMessageProcessor(inputRingBuffer, pollIdleStrategy, FRAME_COUNT_LIMIT, heartbeatLiveness,
+                rspStream, this, "gwInputProcessor");
+
+        gwInputProcessorList.add(gwInputProcessor);
+
+        final long subscriptionId = gwInputProcessor.subscriptionId();
         helios.addGatewaySubscription(subscriptionId, this);
 
-        reportList.add(new GatewayReport(svcRequestProcessor, svcResponseProcessor));
+        report.addRequestProcessor(gwOutputProcessor);
+        report.addResponseProcessor(gwInputProcessor);
 
-        return this;
+        return gatewayHandler;
     }
 
     @Override
@@ -97,8 +116,10 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
 
         ringBufferPool.addEventRingBuffer(eventStream, eventRingBuffer);
 
+        final int heartbeatLiveness = helios.context().heartbeatLiveness();
         final InputMessageProcessor eventProcessor =
-            new InputMessageProcessor(eventRingBuffer, readIdleStrategy, FRAME_COUNT_LIMIT, "eventProcessor"); // FIXME: eventProcessor name
+            new InputMessageProcessor(eventRingBuffer, readIdleStrategy, FRAME_COUNT_LIMIT,
+                heartbeatLiveness, eventStream, null, "eventProcessor"); // FIXME: eventProcessor name
 
         eventProcessorList.add(eventProcessor);
 
@@ -106,24 +127,18 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
     }
 
     @Override
-    public List<RateReport> reportList()
+    public Report report()
     {
-        return reportList;
-    }
-
-    @Override
-    public T handler()
-    {
-        return gatewayProcessor.handler();
+        return report;
     }
 
     @Override
     public void start()
     {
-        ProcessorHelper.start(gatewayProcessor);
+        gatewayProcessorList.forEach(ProcessorHelper::start);
         eventProcessorList.forEach(ProcessorHelper::start);
-        svcRequestProcessorList.forEach(ProcessorHelper::start);
-        ProcessorHelper.start(svcResponseProcessor);
+        gwOutputProcessorList.forEach(ProcessorHelper::start);
+        gwInputProcessorList.forEach(ProcessorHelper::start);
     }
 
     @Override
@@ -143,19 +158,13 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
     @Override
     public void onAvailableImage(final Image image)
     {
-        svcResponseProcessor.onAvailableImage(image);
-
-        // TODO: send HEARTBEAT to service through GatewayHandler
-
-        onAssociationEstablished(); // TODO: remove after HEARTBEAT handling
+        gwInputProcessorList.forEach((p) -> p.onAvailableImage(image));
     }
 
     @Override
     public void onUnavailableImage(final Image image)
     {
-        svcResponseProcessor.onUnavailableImage(image);
-
-        onAssociationBroken(); // TODO: remove after HEARTBEAT handling
+        gwInputProcessorList.forEach((p) -> p.onUnavailableImage(image));
     }
 
     @Override
@@ -179,9 +188,9 @@ public class HeliosGateway<T extends GatewayHandler> implements Gateway<T>, Asso
     @Override
     public void close()
     {
-        CloseHelper.quietClose(svcResponseProcessor);
-        svcRequestProcessorList.forEach(CloseHelper::quietClose);
+        gwInputProcessorList.forEach(CloseHelper::quietClose);
+        gwOutputProcessorList.forEach(CloseHelper::quietClose);
         eventProcessorList.forEach(CloseHelper::quietClose);
-        CloseHelper.quietClose(gatewayProcessor);
+        gatewayProcessorList.forEach(CloseHelper::quietClose);
     }
 }

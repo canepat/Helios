@@ -5,12 +5,10 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 import org.helios.infra.Processor;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 public class ArchiveProcessor<E> implements Processor
 {
     private final Disruptor<E> eventDisruptor;
-    private final AtomicBoolean running;
+    private volatile boolean running;
     private final Thread archiveThread;
 
     @SuppressWarnings("unchecked")
@@ -20,21 +18,27 @@ public class ArchiveProcessor<E> implements Processor
         eventDisruptor = new Disruptor<>(eventFactory, ringBufferSize, DaemonThreadFactory.INSTANCE);
         eventDisruptor.handleEventsWith(new ArchiveEventHandler<>(eventClass, batchSize, batchHandler));
 
-        running = new AtomicBoolean(false);
+        running = false;
         archiveThread = new Thread(this, "archiveProcessor");
+    }
+
+    @Override
+    public String name()
+    {
+        return archiveThread.getName();
     }
 
     @Override
     public void start()
     {
-        running.set(true);
+        running = true;
         archiveThread.start();
     }
 
     @Override
     public void run()
     {
-        while (running.get())
+        while (running)
         {
             // TODO:
         }
@@ -43,7 +47,7 @@ public class ArchiveProcessor<E> implements Processor
     @Override
     public void close() throws Exception
     {
-        running.set(false);
+        running = false;
         archiveThread.join();
     }
 }

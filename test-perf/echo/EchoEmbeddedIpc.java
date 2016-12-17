@@ -11,16 +11,10 @@ import org.helios.service.Service;
 
 import java.util.concurrent.CountDownLatch;
 
-public class EchoEmbedded
+public class EchoEmbeddedIpc
 {
-    private static final String SERVICE_INPUT_CHANNEL = EchoConfiguration.SERVICE_INPUT_CHANNEL;
-    private static final String SERVICE_OUTPUT_CHANNEL = EchoConfiguration.SERVICE_OUTPUT_CHANNEL;
-    private static final String GATEWAY_INPUT_CHANNEL = EchoConfiguration.SERVICE_OUTPUT_CHANNEL;
-    private static final String GATEWAY_OUTPUT_CHANNEL = EchoConfiguration.SERVICE_INPUT_CHANNEL;
     private static final int SERVICE_INPUT_STREAM_ID = EchoConfiguration.SERVICE_INPUT_STREAM_ID;
     private static final int SERVICE_OUTPUT_STREAM_ID = EchoConfiguration.SERVICE_OUTPUT_STREAM_ID;
-    private static final int GATEWAY_INPUT_STREAM_ID = EchoConfiguration.SERVICE_OUTPUT_STREAM_ID;
-    private static final int GATEWAY_OUTPUT_STREAM_ID = EchoConfiguration.SERVICE_INPUT_STREAM_ID;
 
     private static final CountDownLatch GW_ASSOCIATION_LATCH = new CountDownLatch(1);
     private static final CountDownLatch SVC_ASSOCIATION_LATCH = new CountDownLatch(1);
@@ -40,23 +34,21 @@ public class EchoEmbedded
 
         try(final Helios helios = new Helios(context, driver))
         {
-            helios.errorHandler(EchoEmbedded::serviceError);
+            helios.errorHandler(EchoEmbeddedIpc::serviceError);
 
             System.out.print("done\nCreating Helios service...");
 
-            final AeronStream svcInputStream = helios.newStream(SERVICE_INPUT_CHANNEL, SERVICE_INPUT_STREAM_ID);
-            final AeronStream svcOutputStream = helios.newStream(SERVICE_OUTPUT_CHANNEL, SERVICE_OUTPUT_STREAM_ID);
+            final AeronStream ipcInputStream = helios.newIpcStream(SERVICE_INPUT_STREAM_ID);
+            final AeronStream ipcOutputStream = helios.newIpcStream(SERVICE_OUTPUT_STREAM_ID);
             final Service<EchoServiceHandler> svc = helios.addService(EchoServiceHandler::new,
-                EchoEmbedded::associationWithGatewayEstablished, EchoEmbedded::associationWithGatewayBroken,
-                svcInputStream, svcOutputStream);
+                EchoEmbeddedIpc::associationWithGatewayEstablished, EchoEmbeddedIpc::associationWithGatewayBroken,
+                ipcInputStream, ipcOutputStream);
 
             System.out.print("done\nCreating Helios gateway...");
 
-            final AeronStream gwInputStream = helios.newStream(GATEWAY_INPUT_CHANNEL, GATEWAY_INPUT_STREAM_ID);
-            final AeronStream gwOutputStream = helios.newStream(GATEWAY_OUTPUT_CHANNEL, GATEWAY_OUTPUT_STREAM_ID);
             final Gateway<EchoGatewayHandler> gw = helios.addGateway(
-                EchoEmbedded::associationWithServiceEstablished, EchoEmbedded::associationWithServiceBroken);
-            final EchoGatewayHandler gwHandler = gw.addEndPoint(gwOutputStream, gwInputStream, EchoGatewayHandler::new);
+                EchoEmbeddedIpc::associationWithServiceEstablished, EchoEmbeddedIpc::associationWithServiceBroken);
+            final EchoGatewayHandler gwHandler = gw.addEndPoint(ipcInputStream, ipcOutputStream, EchoGatewayHandler::new);
 
             final ConsoleReporter reporter = new ConsoleReporter();
 
@@ -80,7 +72,7 @@ public class EchoEmbedded
             reporter.onReport(svc.report());
         }
 
-        System.out.println("EchoEmbedded is now terminated.");
+        System.out.println("EchoEmbeddedIpc is now terminated.");
         System.exit(0);
     }
 
